@@ -47,6 +47,14 @@ struct LibraryView: View {
                             Text([book.author, "\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))", "\(book.chapters.count) chapters"]
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.subheadline).foregroundStyle(.secondary)
+                            if book.progress > 0 || book.currentChapter > 0 {
+                                HStack(spacing: 8) {
+                                    ProgressView(value: min(1, book.progress)).frame(maxWidth: 160)
+                                    Text("Chapter \(book.currentChapter + 1) of \(book.chapters.count) · \(Int((book.progress * 100).rounded()))%")
+                                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                                }
+                                .padding(.top, 2)
+                            }
                         }
                     }
                     .swipeActions {

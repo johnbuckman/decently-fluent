@@ -14,6 +14,16 @@ final class Generator {
     private(set) var failed: [String: String] = [:]
     /// What the generator is doing besides translating, for the reader's header.
     private(set) var status: String?
+
+    /// The request being answered now: its paragraphs, their words, and when it was sent, for the progress bar.
+    private(set) var current: (keys: Set<String>, words: Int, started: Date)?
+    /// How long requests have taken per source word, averaged (kept between launches).
+    static var secondsPerWord: Double {
+        get { let v = UserDefaults.standard.double(forKey: "secondsPerWord"); return v > 0 ? v : 0.06 }
+        set { UserDefaults.standard.set(newValue, forKey: "secondsPerWord") }
+    }
+    /// Seconds the current request is expected to take.
+    var expectedSeconds: Double { max(8, Double(current?.words ?? 0) * Self.secondsPerWord + 4) }
     var lastError: String?
 
     private struct Job { var book: Book; var level: Level; var paragraphs: [Paragraph] }
@@ -116,8 +126,16 @@ final class Generator {
         let system = Self.systemPrompt(level: level, book: book, given: given, needSide: needSide,
                                        learning: Learner.learning(lang, in: context))
         let user = userPrompt(batch, level: level, book: book, given: given)
+        let words = batch.reduce(0) { $0 + $1.source.split(separator: " ").count }
+        current = (Set(batch.map { Self.key($0, level) }), words, Date())
+        defer { current = nil }
         do {
             let data = try await LLM.json(system: system, user: user)
+            if let c = current, words > 0 {
+                // learn how fast the service is, so the next estimate is closer
+                let perWord = max(0, Date().timeIntervalSince(c.started) - 4) / Double(words)
+                Self.secondsPerWord = Self.secondsPerWord * 0.6 + perWord * 0.4
+            }
             let answer = try JSONDecoder().decode(Answer.self, from: data)
             var introduced = book.introduced[level.rawValue] ?? []
             var known = Set(introduced.map { $0.lemma.lowercased() })

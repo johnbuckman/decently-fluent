@@ -59,14 +59,23 @@ struct GuideView: View {
                 }
                 .padding()
             }
-            HStack {
-                if step > 0 { Button("Back") { withAnimation { step -= 1 } } }
-                Spacer()
-                Button(step == steps - 1 ? "Show my books" : "Next") {
+            HStack(spacing: 12) {
+                if step > 0 {
+                    Button { withAnimation { step -= 1 } } label: { Text("Back").frame(minWidth: 70) }
+                        .buttonStyle(.bordered)
+                }
+                Spacer(minLength: 0)
+                Button {
                     if step == steps - 1 { stored.done = true; onDone() } else { withAnimation { step += 1 } }
+                } label: {
+                    // big and easy to hit; up to 420 points wide where there's room
+                    Text(step == steps - 1 ? "Show my books" : "Next")
+                        .font(.title3.weight(.semibold))
+                        .frame(maxWidth: 420, minHeight: 34)
                 }
                 .buttonStyle(.borderedProminent)
             }
+            .controlSize(.large)
             .padding()
         }
     }

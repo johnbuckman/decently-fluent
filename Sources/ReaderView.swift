@@ -67,6 +67,7 @@ struct ReaderView: View {
                     .scrollBounceBehavior(.basedOnSize)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pageHeight = $0 }
                     .id("\(book.currentChapter)-\(page)")
+                    pageProgress(pages[page])
                     pageBar(page: page, pages: pages)
                 }
                 // a tap that isn't on a word turns the page: right side forward, left side back
@@ -118,7 +119,10 @@ struct ReaderView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
-        .onAppear { refreshLearning() }
+        .onAppear {
+            refreshLearning()
+            book.updateProgress()
+        }
         .preferredColorScheme(readerScheme == "dark" ? .dark : readerScheme == "light" ? .light : nil)
         .onChange(of: book.levelRaw) { _, _ in generate(from: book.readingParagraph) }
     }
@@ -185,6 +189,42 @@ struct ReaderView: View {
         .padding(.horizontal, 20).padding(.vertical, 10)
     }
 
+    /// While this page's text is being written: a bar, how many paragraphs are done, and a time estimate.
+    @ViewBuilder
+    private func pageProgress(_ items: [PageItem]) -> some View {
+        let paragraphs = Array(Set(items.map(\.paragraph.uid))).compactMap { id in items.first { $0.paragraph.uid == id }?.paragraph }
+        let waiting = paragraphs.filter { p in
+            let l = p.effectiveLevel(book: book)
+            return p.rendition(l) == nil && generator.failure(p, l) == nil
+        }
+        if !waiting.isEmpty {
+            TimelineView(.periodic(from: .now, by: 0.5)) { tl in
+                let total = paragraphs.count, done = total - waiting.count
+                let inFlight = waiting.filter { p in generator.current?.keys.contains(Generator.key(p, p.effectiveLevel(book: book))) == true }.count
+                let elapsed = generator.current.map { tl.date.timeIntervalSince($0.started) } ?? 0
+                let expected = generator.expectedSeconds
+                // never quite reaches the end on its own: the last bit waits for the answer
+                let batchShare = min(0.95, elapsed / expected)
+                let fraction = (Double(done) + Double(inFlight) * batchShare) / Double(max(total, 1))
+                let left = max(0, Int((expected - elapsed).rounded()))
+                VStack(alignment: .leading, spacing: 6) {
+                    ProgressView(value: fraction)
+                    HStack {
+                        Text(generator.status ?? "Writing \(sizeClass == .compact ? book.level.rawValue : book.level.label(original: book.isOriginal))…")
+                            .lineLimit(1)
+                        Spacer()
+                        Text(inFlight == 0 ? "\(done) of \(total) paragraphs · waiting its turn"
+                             : elapsed > expected ? "\(done) of \(total) paragraphs · taking longer than usual, \(Int(elapsed)) s"
+                             : "\(done) of \(total) paragraphs · about \(left) s left")
+                            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20).padding(.top, 6)
+            }
+        }
+    }
+
     /// The page holding the place the reader is at.
     private func pageIndex(_ pages: [[PageItem]]) -> Int {
         let at = (book.readingParagraph, book.readingWord)
@@ -194,6 +234,7 @@ struct ReaderView: View {
     private func go(to item: PageItem?) {
         book.readingParagraph = item?.paragraph.index ?? 0
         book.readingWord = item?.words.lowerBound ?? 0
+        book.updateProgress()
     }
 
     private func turn(_ step: Int, pages: [[PageItem]]) {

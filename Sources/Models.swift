@@ -213,6 +213,21 @@ final class Book {
     var readingParagraph: Int = 0
     /// …and the word in it the page starts at, when a page starts partway through a paragraph.
     var readingWord: Int = 0
+    /// How far through the book the reader is (0…1, by words of the book as written), updated as pages turn.
+    var progress: Double = 0
+
+    /// Works out `progress` from the current chapter and paragraph.
+    func updateProgress() {
+        var before = 0, total = 0
+        for (i, ch) in sortedChapters.enumerated() {
+            for p in ch.paragraphs {
+                let n = p.source.split(separator: " ").count
+                total += n
+                if i < currentChapter || (i == currentChapter && p.index < readingParagraph) { before += n }
+            }
+        }
+        progress = total > 0 ? Double(before + readingWord) / Double(total) : 0
+    }
     var createdAt: Date = Date()
     var introducedData: Data?
     @Relationship(deleteRule: .cascade, inverse: \Chapter.book) var chapters: [Chapter] = []
