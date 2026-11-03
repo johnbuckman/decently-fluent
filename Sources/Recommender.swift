@@ -7,8 +7,9 @@ struct ReadingProfile {
     var language: Language
     /// The reader's own language.
     var native: Language
-    /// Books written in the language, rather than books retold in it.
-    var originals: Bool
+    var kind: BookKind
+    /// The book is read as written (an original, or a published translation), rather than retold.
+    var originals: Bool { kind != .retold }
     var level: Level
     var interests: Set<Category>
     var minutesPerDay: Int
@@ -28,13 +29,28 @@ struct ReadingProfile {
     /// The vocabulary measure that matters at this level: the 2,000 most common words up to B1, 5,000 above.
     var usesCoverage5k: Bool { [.b2, .c1, .native].contains(level) }
 
-    /// Where the books come from: the language itself for originals; otherwise books in the reader's
+    /// Which catalog editions this kind of book comes from.
+    var editions: Catalog.Editions {
+        switch kind { case .retold: .any; case .original: .originals; case .translated: .translations }
+    }
+
+    /// Where the books come from: the language itself for originals and translations; otherwise books in the reader's
     /// own language, and English books (the biggest collection) unless English is being learned.
     var sourceLanguages: [Language] {
         if originals { return [language] }
         return native == .english || language == .english ? [native] : [native, .english]
     }
     var retoldDescription: String { sourceLanguages.map(\.name).joined(separator: " or ") }
+}
+
+/// The three kinds of book the guide offers.
+enum BookKind: String, CaseIterable {
+    /// A book in the reader's language (or English) rewritten in the language being learned.
+    case retold
+    /// A book first written in the language being learned.
+    case original
+    /// A published, professional translation into the language being learned.
+    case translated
 }
 
 struct Reason: Identifiable {
@@ -66,10 +82,10 @@ enum Recommender {
         var out: [Recommendation] = []
         for source in p.sourceLanguages {
             let lang = source.rawValue
-            var books = Catalog.shared.measured(language: lang, categories: p.interests, originalsOnly: p.originals)
+            var books = Catalog.shared.measured(language: lang, categories: p.interests, editions: p.editions)
             // a translation of a book first written in the language being learned belongs with the originals
             if !p.originals { books.removeAll { Catalog.shared.bestEditions(of: $0.id)[p.language]?.translated == false } }
-            let all = Catalog.shared.measured(language: lang, originalsOnly: p.originals)
+            let all = Catalog.shared.measured(language: lang, editions: p.editions)
             // vocabulary and popularity are judged against every measured book in the same language
             let coverages = all.compactMap { p.usesCoverage5k ? $0.coverage5k : $0.coverage2k }.sorted()
             let popularity = all.map(\.popularity).sorted()
@@ -143,6 +159,10 @@ enum Recommender {
 
         // published human translations (Toral & Way 2018)
         let editions = Catalog.shared.bestEditions(of: b.id)
+        if b.translated && b.lang == p.language {
+            reasons.append(Reason(good: true, text: "A professional \(p.language.name) translation\(b.translator.isEmpty ? "" : " by \(b.translator)"): natural \(p.language.name), written by a person, not a machine",
+                                  principle: .humanTranslation))
+        }
         if b.lang != p.language, let e = editions[p.language] {
             total += 0.10
             reasons.append(Reason(good: true, text: e.translated
@@ -169,7 +189,7 @@ enum Recommender {
 struct StoredProfile: DynamicProperty {
     @AppStorage("guide.language") var language = Language.french.rawValue
     @AppStorage("nativeLanguage") var native = Language.english.rawValue
-    @AppStorage("guide.originals") var originals = false
+    @AppStorage("guide.kind") var kind = BookKind.retold.rawValue
     @AppStorage("guide.level") var level = Level.b1.rawValue
     @AppStorage("guide.interests") var interests = ""
     @AppStorage("guide.minutes") var minutes = 20
@@ -179,7 +199,7 @@ struct StoredProfile: DynamicProperty {
         let mine = Language(rawValue: native) ?? .english
         var learning = Language(rawValue: language) ?? .french
         if learning == mine { learning = mine == .english ? .french : .english }
-        return ReadingProfile(language: learning, native: mine, originals: originals,
+        return ReadingProfile(language: learning, native: mine, kind: BookKind(rawValue: kind) ?? .retold,
                        level: Level(rawValue: level) ?? .b1,
                        interests: Set(interests.split(separator: ",").compactMap { Category(rawValue: String($0)) }),
                        minutesPerDay: minutes)

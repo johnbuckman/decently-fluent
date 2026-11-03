@@ -72,7 +72,7 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showWords) { MyWordsView() }
-            .sheet(isPresented: $showDiscover) { DiscoverView { path = [$0] } }
+            .fullScreenCover(isPresented: $showDiscover) { DiscoverView { path = [$0] } }
             .sheet(item: $pendingImport) { imported in
                 ImportChoiceView(imported: imported) { lang, source, native in
                     pendingImport = nil
@@ -165,7 +165,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Translation")
                 } footer: {
-                    Text("Books are translated a chapter at a time, only as you read, and each level is kept once made. Your key is stored in the iOS Keychain on this device.")
+                    Text("Only the next few pages are rewritten, as you read, so changing your level costs nothing and no credits go on pages you never reach. Each level is kept once made. Your key is stored in the iOS Keychain on this device.")
                 }
             }
             .navigationTitle("Settings")

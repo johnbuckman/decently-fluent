@@ -17,6 +17,8 @@ struct ReaderView: View {
     @State private var card: WordCard?
     @State private var sighted: Set<String> = []
     @State private var learningLemmas: Set<String> = []
+    /// The last paragraph that came on screen, where text making picks up after a change of level.
+    @State private var lastSeen = 0
 
     private var chapters: [Chapter] { book.sortedChapters }
     private var chapter: Chapter? { chapters.indices.contains(book.currentChapter) ? chapters[book.currentChapter] : chapters.first }
@@ -34,6 +36,11 @@ struct ReaderView: View {
                                              learningLemmas: learningLemmas,
                                              onTap: { tapped($0, $1) }, onDoubleTap: { doubleTapped($0, $1) },
                                              onShown: { shown(p, $0) })
+                                    .onAppear {
+                                        // keep a few pages ahead of the reader
+                                        lastSeen = p.index
+                                        generator.ensure(chapter: chapter, book: book, from: p.index)
+                                    }
                             }
                             chapterNavigation
                         }
@@ -44,6 +51,7 @@ struct ReaderView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .onChange(of: book.currentChapter) { _, _ in
+                    lastSeen = 0
                     proxy.scrollTo("top", anchor: .top)
                     generate()
                 }
@@ -142,7 +150,7 @@ struct ReaderView: View {
 
     private func generate() {
         guard let chapter else { return }
-        generator.ensure(chapter: chapter, book: book)
+        generator.ensure(chapter: chapter, book: book, from: lastSeen)
     }
 
     private func refreshLearning() {
@@ -278,7 +286,7 @@ struct ParagraphRow: View {
                 Button {
                     paragraph.overrideLevel = (l == book.level) ? nil : l
                     try? context.save()
-                    if let ch = paragraph.chapter { generator.ensure(chapter: ch, book: book) }
+                    if let ch = paragraph.chapter { generator.ensure(chapter: ch, book: book, from: paragraph.index) }
                 } label: {
                     if l == current { Label(l.label, systemImage: "checkmark") } else { Text(l.label) }
                 }

@@ -20,6 +20,7 @@
 		8F9C6037540A506B1EDA4320 /* Recommender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64505268242E29C1B72D8C94 /* Recommender.swift */; };
 		A53E6CED843CA72617293AA8 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393D3C545B9CABAE7299F6AE /* ReaderView.swift */; };
 		A6B58F31B43187C2808FBC10 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 587FEBCACBFDC7BA392835C6 /* libsqlite3.tbd */; };
+		AC88FE466EBBCAE06A5B1341 /* Wikipedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8149E7B9D85B737801396E58 /* Wikipedia.swift */; };
 		ADB1940C982CE04C9CB0BABF /* LLM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F392E4DB8A0377F7479FE1 /* LLM.swift */; };
 		AE0736753CE1351552166848 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0CD16FC36092AE7DFE4D0574 /* Assets.xcassets */; };
 		AFD36DED55A499DC066B4474 /* WordFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AEB75BFE3C32B58B0C0CC7 /* WordFlow.swift */; };
@@ -37,6 +38,7 @@
 		393D3C545B9CABAE7299F6AE /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		587FEBCACBFDC7BA392835C6 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		64505268242E29C1B72D8C94 /* Recommender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recommender.swift; sourceTree = "<group>"; };
+		8149E7B9D85B737801396E58 /* Wikipedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wikipedia.swift; sourceTree = "<group>"; };
 		8FBE562F5154679F6545022C /* Generator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Generator.swift; sourceTree = "<group>"; };
 		98F09F94CCB058B43E1C514D /* ImportChoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportChoiceView.swift; sourceTree = "<group>"; };
 		AB8015A141BEBCEE22D2CA72 /* SampleStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleStory.swift; sourceTree = "<group>"; };
@@ -92,6 +94,7 @@
 				64505268242E29C1B72D8C94 /* Recommender.swift */,
 				AE215EC76FA1545148FF006B /* Research.swift */,
 				AB8015A141BEBCEE22D2CA72 /* SampleStory.swift */,
+				8149E7B9D85B737801396E58 /* Wikipedia.swift */,
 				04AEB75BFE3C32B58B0C0CC7 /* WordFlow.swift */,
 			);
 			path = Sources;
@@ -211,6 +214,7 @@
 				8F9C6037540A506B1EDA4320 /* Recommender.swift in Sources */,
 				325DAC340017A3A79ACC670D /* Research.swift in Sources */,
 				5245C5886D5E8BDFA8DA8BBB /* SampleStory.swift in Sources */,
+				AC88FE466EBBCAE06A5B1341 /* Wikipedia.swift in Sources */,
 				AFD36DED55A499DC066B4474 /* WordFlow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -94,9 +94,14 @@ final class Catalog {
     """
 
     /// Measured books in one language, optionally only those in some categories, or only those written in it.
-    func measured(language: String, categories: Set<Category> = [], originalsOnly: Bool = false) -> [CatalogBook] {
+    /// Which editions a list keeps: any, only books written in their language, or only published translations.
+    enum Editions { case any, originals, translations
+        var sql: String { switch self { case .any: ""; case .originals: " AND translated = 0"; case .translations: " AND translated = 1" } }
+    }
+
+    func measured(language: String, categories: Set<Category> = [], editions: Editions = .any) -> [CatalogBook] {
         var sql = "SELECT \(Self.columns) FROM books WHERE language = ? AND measured = 1"
-        if originalsOnly { sql += " AND translated = 0" }
+        sql += editions.sql
         if !categories.isEmpty {
             sql += " AND (" + categories.map { "(',' || categories || ',') LIKE '%,\($0.rawValue),%'" }.joined(separator: " OR ") + ")"
         }
@@ -104,9 +109,9 @@ final class Catalog {
     }
 
     /// The most popular books of one group, measured or not.
-    func shelf(_ category: Category, language: String, originalsOnly: Bool = false, limit: Int = 60) -> [CatalogBook] {
+    func shelf(_ category: Category, language: String, editions: Editions = .any, limit: Int = 60) -> [CatalogBook] {
         query("SELECT \(Self.columns) FROM books WHERE language = ? AND (',' || categories || ',') LIKE ?"
-              + (originalsOnly ? " AND translated = 0" : "") + " ORDER BY popularity DESC LIMIT ?",
+              + editions.sql + " ORDER BY popularity DESC LIMIT ?",
               [language, "%,\(category.rawValue),%", limit])
     }
 

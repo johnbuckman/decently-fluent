@@ -224,25 +224,42 @@ def coverage(m, ranks, limit):
     return round(known / sum(m["counts"].values()), 4)
 
 
-def infer_translations(books):
-    """Some Gutenberg records of translations name no translator (an Italian Monte-Cristo). Treat a book as
-    translated when its language is a small minority among its author's books that do look like originals."""
-    by_agent = collections.defaultdict(collections.Counter)
+def author_languages(books, cache_path):
+    """The language each author wrote in, for authors whose untranslated-looking books come in more than one
+    language. Gutenberg often names no translator (an Italian Monte-Cristo, an English Arsène Lupin), and
+    counting books misleads for authors read mostly in translation, so DeepSeek is asked, 40 authors a
+    request, and the answers are cached with the editions."""
+    cache = json.load(open(cache_path)) if os.path.exists(cache_path) else {}
+    by_agent = collections.defaultdict(list)
     for b in books:
-        if not b["translated"]:
-            for a in b["agents"]:
-                by_agent[a][b["language"]] += 1
-    found = []
-    for b in books:
-        if b["translated"] or not b["agents"]:
+        if not b["translated"] and b["agents"]:
+            by_agent[b["agents"][0]].append(b)
+    todo = [a for a, bs in by_agent.items() if len({b["language"] for b in bs}) > 1 and f"author:{a}" not in cache]
+    print(f"author languages: {len(todo)} to ask", flush=True)
+    system = "You are a literary historian. Answer with only a JSON object."
+    for i in range(0, len(todo), 40):
+        chunk = todo[i:i + 40]
+        lines = "\n".join(f'{a}: {by_agent[a][0]["author"]} ({by_agent[a][0]["years"]}) — e.g. "{by_agent[a][0]["title"][:60]}"'
+                          for a in chunk)
+        user = ("For each author, the language they wrote their books in, as one of en, fr, de, es, it, or \"other\".\n"
+                f"{lines}\n\nAnswer: {{\"<id>\": \"fr\", ...}}")
+        try:
+            answer = deepseek(system, user)
+            for a in chunk:
+                cache[f"author:{a}"] = answer.get(a) or answer.get(str(a)) or "unknown"
+        except Exception as e:
+            print("  author languages request failed:", e, flush=True)
+    json.dump(cache, open(cache_path, "w"))
+    found = 0
+    for a, bs in by_agent.items():
+        lang = cache.get(f"author:{a}")
+        if lang not in LANGS:
             continue
-        langs = by_agent[b["agents"][0]]
-        main, count = langs.most_common(1)[0]
-        if main != b["language"] and count >= 3 and langs[b["language"]] * 3 <= count:
-            found.append(b)
-    for b in found:
-        b["translated"] = True
-    print(f"inferred {len(found)} more translations from their authors' main language", flush=True)
+        for b in bs:
+            if b["language"] != lang:
+                b["translated"] = True
+                found += 1
+    print(f"inferred {found} more translations from their authors' language", flush=True)
 
 
 def originals_by_work(books, works):
@@ -389,7 +406,8 @@ def main():
             unique.append(b)
     books = unique
     print("kept", collections.Counter(b["language"] for b in books), flush=True)
-    infer_translations(books)
+    if "--editions" in sys.argv:
+        author_languages(books, sys.argv[sys.argv.index("--editions") + 1])
 
     measured = {}
     for lang, n in n_analyse.items():

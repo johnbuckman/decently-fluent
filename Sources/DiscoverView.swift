@@ -90,16 +90,20 @@ struct GuideView: View {
         let p = stored.profile
         let lang = p.language.name, native = p.native.name
         var retold = p
-        retold.originals = false
+        retold.kind = .retold
         return VStack(alignment: .leading, spacing: 14) {
             Text("What kind of book?").font(.title2.weight(.semibold))
             OptionCard(title: "Books in \(retold.retoldDescription), retold in \(lang)",
                        detail: "The widest choice, including stories you may already know. Turn your phone sideways to see the \(native) beside the \(lang): the book as written, or a published translation where one exists.",
-                       selected: !stored.originals) { stored.originals = false }
-            OptionCard(title: "Books written in \(lang)",
+                       selected: p.kind == .retold) { stored.kind = BookKind.retold.rawValue }
+            OptionCard(title: "Books originally written in \(lang)",
                        detail: "The author's own \(lang): unchanged at Native level, simplified at lower levels, keeping their words wherever they fit. The \(native) side is a published translation where one exists, otherwise a machine translation.",
-                       selected: stored.originals) { stored.originals = true }
+                       selected: p.kind == .original) { stored.kind = BookKind.original.rawValue }
+            OptionCard(title: "Books professionally translated into \(lang)",
+                       detail: "Classics from other languages in a published \(lang) translation: natural \(lang) written by a person, unchanged at Native level and simplified at lower levels. The \(native) side is the original or a published translation where one exists.",
+                       selected: p.kind == .translated) { stored.kind = BookKind.translated.rawValue }
             ResearchNote(.authentic)
+            ResearchNote(.humanTranslation)
         }
     }
 
@@ -109,7 +113,7 @@ struct GuideView: View {
             Text("Every book is rewritten to this level. You can change it any time, even for a single paragraph.")
                 .foregroundStyle(.secondary)
             ForEach(Level.allCases) { l in
-                OptionCard(title: l.label(original: stored.originals), detail: Self.levelHint(l), selected: stored.level == l.rawValue) { stored.level = l.rawValue }
+                OptionCard(title: l.label(original: stored.profile.originals), detail: Self.levelHint(l), selected: stored.level == l.rawValue) { stored.level = l.rawValue }
             }
             ResearchNote(.coverage)
             ResearchNote(.fluency)
@@ -234,6 +238,7 @@ struct RecommendationsView: View {
     let onChange: () -> Void
     @State private var recs: [Recommendation] = []
     @State private var loading = true
+    @State private var shown = 10
 
     var body: some View {
         List {
@@ -251,7 +256,10 @@ struct RecommendationsView: View {
                 } else if recs.isEmpty {
                     Text("No measured books match these choices yet. Try fewer story types.").foregroundStyle(.secondary)
                 }
-                ForEach(recs) { RecommendationRow(rec: $0) }
+                ForEach(recs.prefix(shown)) { RecommendationRow(rec: $0) }
+                if recs.count > shown {
+                    Button("Show more") { shown += 10 }
+                }
             }
             Section("Browse") {
                 ForEach(Category.allCases) { c in
@@ -265,13 +273,18 @@ struct RecommendationsView: View {
         .task {
             // a few thousand catalog lookups: keep them off the main thread
             let profile = profile
-            recs = await Task.detached { Recommender.recommend(profile) }.value
+            recs = await Task.detached { Recommender.recommend(profile, limit: 200) }.value
             loading = false
         }
     }
 
     private var summary: String {
-        let kind = profile.originals ? "Books written in \(profile.language.name)" : "Books in \(profile.retoldDescription) retold in \(profile.language.name)"
+        let lang = profile.language.name
+        let kind = switch profile.kind {
+        case .retold: "Books in \(profile.retoldDescription) retold in \(lang)"
+        case .original: "Books originally written in \(lang)"
+        case .translated: "Books professionally translated into \(lang)"
+        }
         let likes = profile.interests.isEmpty ? "any kind of story" : profile.interests.map(\.name).sorted().joined(separator: ", ")
         return "\(kind) · \(profile.level.rawValue) · \(profile.minutesPerDay) min a day · \(likes)"
     }
@@ -318,7 +331,7 @@ struct ShelfView: View {
     let profile: ReadingProfile
     var body: some View {
         let books = profile.sourceLanguages
-            .flatMap { Catalog.shared.shelf(category, language: $0.rawValue, originalsOnly: profile.originals) }
+            .flatMap { Catalog.shared.shelf(category, language: $0.rawValue, editions: profile.editions) }
             .sorted { $0.popularity > $1.popularity }
         List(books) { CatalogRow(book: $0) }
             .navigationTitle(category.name)
@@ -363,6 +376,9 @@ struct BookPreview: View {
     @State private var error: String?
     @State private var loading = false
     @State private var adding: String?
+    @State private var wiki: WikipediaArticle?
+    @State private var wikiLoaded = false
+    @State private var wikiExpanded = false
 
     private var editions: [Language: CatalogBook] { Catalog.shared.bestEditions(of: book.id) }
 
@@ -386,6 +402,26 @@ struct BookPreview: View {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+
+            if let wiki {
+                Section {
+                    Text(wiki.summary)
+                        .font(.callout)
+                        .lineLimit(wikiExpanded ? nil : 6)
+                    if !wikiExpanded {
+                        Button("Read the whole summary") { wikiExpanded = true }.font(.callout)
+                    }
+                    Link(destination: wiki.url) {
+                        Label("\(wiki.title) on Wikipedia\(wiki.language == profile.native ? "" : " (\(wiki.language.name))")", systemImage: "book.pages")
+                    }
+                } header: { Text(wiki.isPlot ? "The story" : "About this book") } footer: {
+                    Text("From Wikipedia, under CC BY-SA 4.0.")
+                }
+            } else if !wikiLoaded {
+                Section("The story") {
+                    HStack { ProgressView(); Text("Looking on Wikipedia…").foregroundStyle(.secondary) }
+                }
             }
 
             if let rec {
@@ -434,6 +470,10 @@ struct BookPreview: View {
                 } else if let imported {
                     if let original = book.originalLanguage, original != profile.native {
                         Button { Task { await add(original) } } label: { Label("Read the \(original.name) original", systemImage: "book") }
+                    } else if book.translated, book.lang != profile.native {
+                        Button { Task { await add(book.lang) } } label: {
+                            Label("Read this \(book.lang.name) translation", systemImage: "book")
+                        }
                     }
                     let langs = ([profile.language] + Language.allCases.filter { $0 != profile.language })
                         .filter { $0 != book.lang && $0 != profile.native }
@@ -448,7 +488,8 @@ struct BookPreview: View {
                             }
                         }
                     }
-                    Text("\(imported.chapters.count) chapters, translated as you reach them.").font(.caption).foregroundStyle(.secondary)
+                    Text("\(imported.chapters.count) chapters. Only the next few pages are rewritten, as you reach them, so you can change your level at any point and nothing is spent on pages you never read.")
+                        .font(.caption).foregroundStyle(.secondary)
                 } else if let error {
                     Text(error).foregroundStyle(.orange)
                 } else {
@@ -462,6 +503,10 @@ struct BookPreview: View {
         }
         .navigationTitle("Book")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: book.id) {
+            wiki = await Wikipedia.article(for: book, in: profile.native)
+            wikiLoaded = true
+        }
     }
 
     private func load() async {

@@ -22,32 +22,36 @@ final class Generator {
 
     static let batchParagraphs = 8
     static let batchWords = 1_200
+    /// How far ahead of the reader text is made: about five printed pages. Only what is about to be read is
+    /// rewritten, so a change of level costs little and no credits go on pages the reader never reaches.
+    static let lookaheadWords = 1_500
 
     static func key(_ p: Paragraph, _ l: Level) -> String { "\(p.uid.uuidString)|\(l.rawValue)" }
     func isPending(_ p: Paragraph, _ l: Level) -> Bool { pending.contains(Self.key(p, l)) }
     func failure(_ p: Paragraph, _ l: Level) -> String? { failed[Self.key(p, l)] }
 
-    /// Queues every paragraph of this chapter that has no text yet at its level,
-    /// ahead of anything already waiting, then the next chapter behind it.
-    func ensure(chapter: Chapter, book: Book) {
-        let now = jobs(for: chapter, book: book)
-        queue.insert(contentsOf: now, at: 0)
-        let chapters = book.sortedChapters
-        if let i = chapters.firstIndex(where: { $0.persistentModelID == chapter.persistentModelID }), i + 1 < chapters.count {
-            queue.append(contentsOf: jobs(for: chapters[i + 1], book: book))
+    /// Queues the next few pages from paragraph `from` that have no text yet at their level, ahead of anything
+    /// already waiting. Called again as the reader scrolls, so it keeps a few pages ahead of them.
+    func ensure(chapter: Chapter, book: Book, from: Int = 0) {
+        var ahead: [Paragraph] = [], words = 0
+        for p in chapter.sortedParagraphs where p.index >= from {
+            guard words < Self.lookaheadWords else { break }
+            ahead.append(p)
+            words += p.source.split(separator: " ").count
         }
+        queue.insert(contentsOf: jobs(for: ahead, book: book), at: 0)
         run()
     }
 
     func retry(_ p: Paragraph, book: Book) {
         let l = p.effectiveLevel(book: book)
         failed[Self.key(p, l)] = nil
-        if let ch = p.chapter { ensure(chapter: ch, book: book) }
+        if let ch = p.chapter { ensure(chapter: ch, book: book, from: p.index) }
     }
 
-    private func jobs(for chapter: Chapter, book: Book) -> [Job] {
+    private func jobs(for paragraphs: [Paragraph], book: Book) -> [Job] {
         var byLevel: [Level: [Paragraph]] = [:]
-        for p in chapter.sortedParagraphs {
+        for p in paragraphs {
             let l = p.effectiveLevel(book: book)
             let k = Self.key(p, l)
             guard p.rendition(l) == nil, !pending.contains(k), failed[k] == nil else { continue }
