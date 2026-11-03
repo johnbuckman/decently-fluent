@@ -206,11 +206,21 @@ enum LLM {
 enum Keychain {
     static let service = "com.decentespresso.decentlyfluent"
 
+    /// On a Mac the app is signed with a Developer ID and no provisioning profile, which can't use the
+    /// data-protection keychain: use the login keychain there.
+    private static func query(_ q: [String: Any]) -> [String: Any] {
+        var q = q
+        #if targetEnvironment(macCatalyst)
+        q[kSecUseDataProtectionKeychain as String] = false
+        #endif
+        return q
+    }
+
     static func get(_ account: String) -> String? {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account, kSecReturnData as String: true]
         var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
+        guard SecItemCopyMatching(query(q) as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
         return String(data: d, encoding: .utf8)
     }
 
@@ -219,12 +229,12 @@ enum Keychain {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account, kSecValueData as String: Data(value.utf8),
                                 kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock]
-        SecItemAdd(q as CFDictionary, nil)
+        SecItemAdd(query(q) as CFDictionary, nil)
     }
 
     static func delete(_ account: String) {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account]
-        SecItemDelete(q as CFDictionary)
+        SecItemDelete(query(q) as CFDictionary)
     }
 }
