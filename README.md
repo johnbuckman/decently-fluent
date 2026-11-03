@@ -17,6 +17,13 @@ A graded-reader generator for iPhone, iPad and Mac, for learners of English, Fre
 - **Open books from anywhere:** Files, another app's share sheet, or AirDrop (EPUB, PDF, text). The app detects the book's language and asks whether to read the original or retell it.
 - **Recycling:** each book keeps a list of the words each level has introduced and asks the writer to reuse them until each has been seen 5 times, as graded readers do.
 
+## Install
+
+- **iPhone and iPad:** in [SideStep](https://github.com/johnbuckman/SideStep), search for Decently Fluent, or sideload `decently-fluent.ipa` from the [latest release](https://github.com/johnbuckman/decently-fluent/releases/latest) with AltStore, SideStore or Sideloadly.
+- **Mac:** download `decently-fluent-mac.dmg` from the [latest release](https://github.com/johnbuckman/decently-fluent/releases/latest) (signed and notarized).
+
+Rewriting books needs an AI service: add a Claude or DeepSeek API key in Settings. It is stored in the Keychain on your device and sent only to that service.
+
 ## Build
 
 ```bash
@@ -75,3 +82,7 @@ Book texts are fetched from Gutenberg mirrors, measured and discarded. Book file
 | `Sources/ImportChoiceView.swift` | Opening a book from Files, sharing or AirDrop; language detection |
 | `Sources/LearnerFit.swift` | Judges an unmeasured book after download |
 | `Sources/ReaderView.swift`, `WordFlow.swift` | The reader: tappable word layout, labels, gloss card, landscape view |
+
+## Licence
+
+The code is released under the GNU General Public License, version 3 (see [LICENSE](LICENSE)). Book texts come from Project Gutenberg and are downloaded from gutenberg.org when you choose them; the bundled catalog is built from Gutenberg's public catalog data. Plot summaries are fetched from Wikipedia (CC BY-SA 4.0) and credited in the app.

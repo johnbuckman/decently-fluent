@@ -110,17 +110,10 @@ struct ReaderView: View {
             }
         }
         .animation(.snappy, value: card)
-        .navigationTitle(book.title)
+        // the title is the chapters pull-down in the toolbar instead
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
-        // tapping the book's title lists its chapters
-        .toolbarTitleMenu {
-            ForEach(Array(chapters.enumerated()), id: \.offset) { i, ch in
-                Button { book.currentChapter = i; go(to: nil) } label: {
-                    if i == book.currentChapter { Label(ch.title, systemImage: "checkmark") } else { Text(ch.title) }
-                }
-            }
-        }
         .onAppear { refreshLearning() }
         .onChange(of: book.levelRaw) { _, _ in generate(from: book.readingParagraph) }
     }
@@ -291,6 +284,25 @@ struct ReaderView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        // the book's title, as a pull-down listing its chapters
+        // (leading, beside the back button: a Mac Catalyst toolbar has no centre slot)
+        ToolbarItem(placement: .topBarLeading) {
+            Menu {
+                ForEach(Array(chapters.enumerated()), id: \.offset) { i, ch in
+                    Button { book.currentChapter = i; go(to: nil) } label: {
+                        if i == book.currentChapter { Label(ch.title, systemImage: "checkmark") } else { Text(ch.title) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(book.title).font(.headline).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.primary)
+            }
+            .accessibilityLabel("Chapters of \(book.title)")
+        }
+
         ToolbarItemGroup(placement: .primaryAction) {
             Button { showNewWords.toggle() } label: {
                 Label(showNewWords ? "Hide new words" : "Show new words", systemImage: showNewWords ? "eye" : "eye.slash")
