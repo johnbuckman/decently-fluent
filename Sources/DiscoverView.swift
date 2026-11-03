@@ -286,7 +286,7 @@ struct RecommendationsView: View {
         case .translated: "Books professionally translated into \(lang)"
         }
         let likes = profile.interests.isEmpty ? "any kind of story" : profile.interests.map(\.name).sorted().joined(separator: ", ")
-        return "\(kind) · \(profile.level.rawValue) · \(profile.minutesPerDay) min a day · \(likes)"
+        return "\(kind) · \(profile.level.label(original: profile.originals)) · \(profile.minutesPerDay) min a day · \(likes)"
     }
 }
 
@@ -430,12 +430,12 @@ struct BookPreview: View {
                         ScoreBadge(score: rec.score)
                         VStack(alignment: .leading) {
                             Text(rec.verdict).font(.headline)
-                            Text("for \(profile.level.rawValue), \(profile.minutesPerDay) minutes a day").font(.caption).foregroundStyle(.secondary)
+                            Text("for \(profile.level.label(original: profile.originals)), \(profile.minutesPerDay) minutes a day").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     ForEach(rec.reasons) { r in ReasonRow(reason: r) }
                     if rec.score >= 75 && profile.level != .a1 {
-                        ReasonRow(reason: Reason(good: true, text: "Tip: a good fit like this is ideal for fluency practice — try a chapter one level below \(profile.level.rawValue); it should feel effortless.", principle: .fluency))
+                        ReasonRow(reason: Reason(good: true, text: "Tip: a good fit like this is ideal for fluency practice — try a chapter one level below \(profile.level.label); it should feel effortless.", principle: .fluency))
                     }
                 } header: { Text("Why this book") } footer: {
                     Text("Measured from the book's text. Tap a reason with a cap icon to see the research behind it.")

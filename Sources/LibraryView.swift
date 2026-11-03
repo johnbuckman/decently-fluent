@@ -24,42 +24,41 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                if books.isEmpty {
-                    ContentUnavailableView {
-                        Label("No books yet", systemImage: "books.vertical")
-                    } description: {
+                Section {
+                    Button { showDiscover = true } label: {
+                        Label("Find a book for me…", systemImage: "sparkle.magnifyingglass")
+                    }
+                    Button { showImporter = true } label: {
+                        Label("Open a book on this device…", systemImage: "folder")
+                    }
+                    if books.isEmpty {
+                        Button { addSample() } label: { Label("Add the sample story", systemImage: "text.book.closed") }
+                    }
+                } footer: {
+                    if books.isEmpty {
                         Text("Find a free classic, or open an EPUB, PDF or text file. Read it in English, French, German, Spanish or Italian — retold at your level, or the original simplified.")
-                    } actions: {
-                        Button("Find a free book") { showDiscover = true }.buttonStyle(.borderedProminent)
-                        Button("Add a short sample story") { addSample() }
                     }
                 }
-                ForEach(books) { book in
+                Section(books.isEmpty ? "" : "Your books") {
+                    ForEach(books) { book in
                     NavigationLink(value: book) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(book.title).font(.headline)
-                            Text([book.author, "\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.rawValue)", "\(book.chapters.count) chapters"]
+                            Text([book.author, "\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))", "\(book.chapters.count) chapters"]
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
                 }
-                .onDelete { idx in
-                    for i in idx { context.delete(books[i]) }
-                    try? context.save()
+                    .onDelete { idx in
+                        for i in idx { context.delete(books[i]) }
+                        try? context.save()
+                    }
                 }
             }
             .navigationTitle("Decently Fluent")
             .navigationDestination(for: Book.self) { ReaderView(book: $0) }
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button { showDiscover = true } label: { Label("Find a book for me…", systemImage: "sparkle.magnifyingglass") }
-                        Button { showImporter = true } label: { Label("Open a book on this device…", systemImage: "folder") }
-                        Divider()
-                        Button("Add the sample story") { addSample() }
-                    } label: { Label("Add book", systemImage: "plus") }
-                }
                 ToolbarItem(placement: .topBarLeading) {
                     HStack {
                         Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape") }

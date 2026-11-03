@@ -208,6 +208,11 @@ final class Book {
     var humanSideEdition: Data?
     var levelRaw: String = Level.b1.rawValue
     var currentChapter: Int = 0
+    /// The first paragraph of the page being read, in the current chapter (pages are re-cut when the screen
+    /// size or the text changes, so the place is kept by paragraph, not by page number).
+    var readingParagraph: Int = 0
+    /// …and the word in it the page starts at, when a page starts partway through a paragraph.
+    var readingWord: Int = 0
     var createdAt: Date = Date()
     var introducedData: Data?
     @Relationship(deleteRule: .cascade, inverse: \Chapter.book) var chapters: [Chapter] = []

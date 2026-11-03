@@ -44,12 +44,15 @@ struct WordFlowText: View {
     let learningLemmas: Set<String>
     let onTap: (WordToken, Gloss?) -> Void
     let onDoubleTap: (WordToken, Gloss?) -> Void
+    /// The words to show, when a page holds only part of the paragraph.
+    var words: Range<Int>? = nil
 
     var body: some View {
         let tokens = WordToken.tokens(rendition.text)
         let matches = Self.match(tokens, rendition.glossary)
+        let shown = words.map { r in tokens.filter { r.contains($0.id) } } ?? tokens
         FlowLayout(spacing: 5, lineSpacing: showNewWords ? 10 : 6) {
-            ForEach(tokens) { t in
+            ForEach(shown) { t in
                 let m = matches[t.id]
                 let gloss = m?.gloss
                 let lemma = gloss?.lemma.lowercased() ?? Lemmatizer.cachedLemma(t.core, language: language)
