@@ -15,6 +15,9 @@ struct ReaderView: View {
     @State private var generator = Generator.shared
     @State private var showNewWords = false
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.colorScheme) private var colorScheme
+    /// "dark" or "light" once the reader has chosen; empty follows the system.
+    @AppStorage("readerScheme") private var readerScheme = ""
     /// The text size, changed by pinching and kept for every book.
     @AppStorage("readerFontSize") private var fontSize: Double = 20
     @GestureState private var pinch: CGFloat = 1
@@ -116,6 +119,7 @@ struct ReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .onAppear { refreshLearning() }
+        .preferredColorScheme(readerScheme == "dark" ? .dark : readerScheme == "light" ? .light : nil)
         .onChange(of: book.levelRaw) { _, _ in generate(from: book.readingParagraph) }
     }
 
@@ -124,8 +128,18 @@ struct ReaderView: View {
     private func header(_ chapter: Chapter, landscape: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(chapter.title).font(.system(.title2, design: .serif).weight(.semibold))
-            Text("\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))\(landscape ? " · \(book.native.name) on the right" : "")")
-                .font(.footnote).foregroundStyle(.secondary)
+            if sizeClass == .compact {
+                levelMenu {
+                    HStack(spacing: 3) {
+                        Text("\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))")
+                        Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                    }
+                    .font(.footnote)
+                }
+            } else {
+                Text("\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))\(landscape ? " · \(book.native.name) on the right" : "")")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             if let credit = translationCredit(chapter) {
                 Text(credit).font(.footnote).foregroundStyle(.secondary)
             }
@@ -284,6 +298,18 @@ struct ReaderView: View {
         return starts
     }
 
+    /// The levels, listed directly (no "Level" submenu).
+    private func levelMenu(@ViewBuilder label: () -> some View) -> some View {
+        Menu {
+            ForEach(Level.allCases) { l in
+                Button { book.level = l } label: {
+                    if l == book.level { Label(l.label(original: book.isOriginal), systemImage: "checkmark") }
+                    else { Text(l.label(original: book.isOriginal)) }
+                }
+            }
+        } label: { label() }
+    }
+
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         // the book's title, as a pull-down listing its chapters
@@ -299,7 +325,7 @@ struct ReaderView: View {
                 HStack(spacing: 4) {
                     // narrow on a phone, so the new-words and level buttons keep their place beside it
                     Text(book.title).font(.headline).lineLimit(1)
-                        .frame(maxWidth: sizeClass == .compact ? 130 : 320, alignment: .leading)
+                        .frame(maxWidth: sizeClass == .compact ? 120 : 320, alignment: .leading)
                     Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 .foregroundStyle(.primary)
@@ -308,24 +334,21 @@ struct ReaderView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
+            // dark or light pages, whatever the system is set to
+            Button { readerScheme = colorScheme == .dark ? "light" : "dark" } label: {
+                Label(colorScheme == .dark ? "Light pages" : "Dark pages", systemImage: colorScheme == .dark ? "sun.max" : "moon")
+            }
+
             Button { showNewWords.toggle() } label: {
                 Label(showNewWords ? "Hide new words" : "Show new words", systemImage: showNewWords ? "eye" : "eye.slash")
             }
             .tint(showNewWords ? .accentColor : nil)
 
-            Menu {
-                // the levels themselves, not a "Level" submenu
-                ForEach(Level.allCases) { l in
-                    Button { book.level = l } label: {
-                        if l == book.level { Label(l.label(original: book.isOriginal), systemImage: "checkmark") }
-                        else { Text(l.label(original: book.isOriginal)) }
-                    }
+            // on a phone the level menu is the line under the chapter heading instead (the toolbar is full)
+            if sizeClass != .compact {
+                levelMenu {
+                    Text(book.level.label(original: book.isOriginal)).font(.headline).lineLimit(1)
                 }
-            } label: {
-                // on a phone just the code ("B1"): the full name is in the menu and under the chapter heading
-                Text(sizeClass == .compact ? book.level.rawValue : book.level.label(original: book.isOriginal))
-                    .font(.headline)
-                    .lineLimit(1)
             }
 
 
@@ -403,9 +426,25 @@ struct FittedText: View {
     let text: String
     /// Sentences to shade (the counterpart of the one the reader tapped).
     var shaded: [String] = []
+    /// Words to mark faintly: the meanings of the new words highlighted in the other column.
+    var faint: [String] = []
 
     private var attributed: AttributedString {
         var a = AttributedString(text)
+        let lower = text.lowercased()
+        for term in faint where term.count > 1 {
+            var from = lower.startIndex
+            while let r = lower.range(of: term.lowercased(), range: from..<lower.endIndex) {
+                from = r.upperBound
+                // whole words only ("rocks", not "rocksteady")
+                let before = r.lowerBound == lower.startIndex ? nil : lower[lower.index(before: r.lowerBound)]
+                let after = r.upperBound == lower.endIndex ? nil : lower[r.upperBound]
+                guard !(before?.isLetter ?? false), !(after?.isLetter ?? false) else { continue }
+                let lo = text.distance(from: text.startIndex, to: r.lowerBound), n = text.distance(from: r.lowerBound, to: r.upperBound)
+                let start = a.index(a.startIndex, offsetByCharacters: lo), end = a.index(start, offsetByCharacters: n)
+                a[start..<end].backgroundColor = Color.yellow.opacity(0.2)
+            }
+        }
         for s in shaded where !s.isEmpty {
             if let r = a.range(of: s) { a[r].backgroundColor = SentenceShade.color; continue }
             // a sentence split over two pages: shade the part on this page (its start, or its end)
@@ -492,6 +531,16 @@ struct ParagraphRow: View {
     @Environment(\.modelContext) private var context
     private var generator: Generator { Generator.shared }
 
+    /// The meanings of this paragraph's highlighted words ("shook, rattled" → "shook", "rattled"; "to wait" → "wait").
+    private func faintTerms(_ level: Level) -> [String] {
+        guard let r = paragraph.rendition(level) else { return [] }
+        return r.glossary.filter { $0.isNew || learningLemmas.contains($0.lemma.lowercased()) }
+            .flatMap { $0.meaning.split(whereSeparator: { ",;/".contains($0) }) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .map { $0.hasPrefix("to ") ? String($0.dropFirst(3)) : $0 }
+            .filter { !$0.isEmpty }
+    }
+
     private var part: PageItem { PageItem(paragraph: paragraph, words: words, wordCount: wordCount) }
 
     var body: some View {
@@ -506,7 +555,8 @@ struct ParagraphRow: View {
                         .frame(maxWidth: .infinity)
                         .overlay(alignment: .topLeading) {
                             let side = paragraph.side(book: book).map { part.share(of: $0) }
-                            FittedText(text: side ?? "\(book.native.name) translation on its way…", shaded: shadedSide)
+                            FittedText(text: side ?? "\(book.native.name) translation on its way…", shaded: shadedSide,
+                                       faint: showNewWords ? faintTerms(level) : [])
                                 .foregroundStyle(side == nil ? .tertiary : .secondary)
                         }
                 }
