@@ -14,11 +14,19 @@ struct ReaderView: View {
     @Environment(\.modelContext) private var context
     @State private var generator = Generator.shared
     @State private var showNewWords = false
+    /// The text size, changed by pinching and kept for every book.
+    @AppStorage("readerFontSize") private var fontSize: Double = 20
+    @GestureState private var pinch: CGFloat = 1
     @State private var card: WordCard?
+    /// The sentence the reader tapped: its paragraph, its place there, and the side column's matching sentences.
+    @State private var pick: (paragraph: UUID, sentence: Int, side: [String])?
     @State private var sighted: Set<String> = []
     @State private var learningLemmas: Set<String> = []
     /// The reader's size at the last layout, for paging from the buttons and keys.
     @State private var lastSize: CGSize = .zero
+    /// The measured height of the text area and of the chapter heading, for cutting pages.
+    @State private var pageHeight: CGFloat = 0
+    @State private var headerHeight: CGFloat = 0
 
     private var chapters: [Chapter] { book.sortedChapters }
     private var chapter: Chapter? { chapters.indices.contains(book.currentChapter) ? chapters[book.currentChapter] : chapters.first }
@@ -27,17 +35,22 @@ struct ReaderView: View {
         GeometryReader { geo in
             let landscape = geo.size.width > geo.size.height
             if let chapter {
-                let pages = Self.pages(chapter.sortedParagraphs, book: book, size: geo.size, landscape: landscape, glossLabels: showNewWords)
+                let pages = cut(chapter.sortedParagraphs, width: geo.size.width, landscape: landscape)
                 let page = pageIndex(pages)
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
-                            if page == 0 { header(chapter, landscape: landscape) }
+                            if page == 0 {
+                                header(chapter, landscape: landscape)
+                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
+                            }
                             ForEach(pages[page]) { item in
+                                let picked = pick?.paragraph == item.paragraph.uid ? pick : nil
                                 ParagraphRow(paragraph: item.paragraph, words: item.words, wordCount: item.wordCount,
                                              book: book, landscape: landscape, showNewWords: showNewWords,
+                                             selectedSentence: picked?.sentence, shadedSide: picked?.side ?? [],
                                              learningLemmas: learningLemmas,
-                                             onTap: { tapped($0, $1) }, onDoubleTap: { doubleTapped($0, $1) },
+                                             onTap: { tapped($0, $1, in: item.paragraph) }, onDoubleTap: { doubleTapped($0, $1) },
                                              onShown: { shown(item.paragraph, $0) })
                             }
                         }
@@ -48,6 +61,7 @@ struct ReaderView: View {
                     }
                     // a page normally fits; it scrolls only when a paragraph is longer than the screen
                     .scrollBounceBehavior(.basedOnSize)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pageHeight = $0 }
                     .id("\(book.currentChapter)-\(page)")
                     pageBar(page: page, pages: pages)
                 }
@@ -57,6 +71,12 @@ struct ReaderView: View {
                     if card != nil { card = nil; return }
                     turn(location.x > geo.size.width / 2 ? 1 : -1, pages: pages)
                 }
+                // pinch to make the text bigger or smaller; the pages are re-cut when the fingers lift
+                .simultaneousGesture(MagnifyGesture()
+                    .updating($pinch) { v, state, _ in state = v.magnification }
+                    .onEnded { v in fontSize = min(36, max(14, (fontSize * v.magnification).rounded())) })
+                .scaleEffect(pinch, anchor: .center)
+                .environment(\.readerFontSize, fontSize)
                 .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { v in
                     guard abs(v.translation.width) > abs(v.translation.height) * 1.5, abs(v.translation.width) > 50 else { return }
                     turn(v.translation.width < 0 ? 1 : -1, pages: pages)
@@ -66,12 +86,20 @@ struct ReaderView: View {
                 .onKeyPress(.rightArrow) { turn(1, pages: pages); return .handled }
                 .onKeyPress(.leftArrow) { turn(-1, pages: pages); return .handled }
                 .onKeyPress(.space) { turn(1, pages: pages); return .handled }
+                .onKeyPress(characters: CharacterSet(charactersIn: "+=-")) { key in
+                    fontSize = min(36, max(14, fontSize + (key.characters == "-" ? -2 : 2)))
+                    return .handled
+                }
                 .onAppear {
                     lastSize = geo.size
                     generate(from: pages[page].first?.paragraph.index ?? 0)
                 }
                 .onChange(of: geo.size) { _, size in lastSize = size }
-                .onChange(of: page) { _, _ in generate(from: pages[page].first?.paragraph.index ?? 0) }
+                // a new page, or a new chapter (whose first page is also page 1)
+                .onChange(of: "\(book.currentChapter)-\(page)") { _, _ in
+                    pick = nil
+                    generate(from: pages[page].first?.paragraph.index ?? 0)
+                }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -85,6 +113,14 @@ struct ReaderView: View {
         .navigationTitle(book.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        // tapping the book's title lists its chapters
+        .toolbarTitleMenu {
+            ForEach(Array(chapters.enumerated()), id: \.offset) { i, ch in
+                Button { book.currentChapter = i; go(to: nil) } label: {
+                    if i == book.currentChapter { Label(ch.title, systemImage: "checkmark") } else { Text(ch.title) }
+                }
+            }
+        }
         .onAppear { refreshLearning() }
         .onChange(of: book.levelRaw) { _, _ in generate(from: book.readingParagraph) }
     }
@@ -172,24 +208,34 @@ struct ReaderView: View {
             book.currentChapter -= 1
             // the last page of the chapter before
             let before = chapters[book.currentChapter].sortedParagraphs
-            go(to: Self.pages(before, book: book, size: lastSize, landscape: lastSize.width > lastSize.height, glossLabels: showNewWords)
-                .last?.first)
+            go(to: cut(before, width: lastSize.width, landscape: lastSize.width > lastSize.height).last?.first)
         }
+    }
+
+    /// This chapter's pages for the text area as measured (estimated until it has been laid out once).
+    private func cut(_ paragraphs: [Paragraph], width: CGFloat, landscape: Bool) -> [[PageItem]] {
+        let height = pageHeight > 0 ? pageHeight : lastSize.height - 64
+        return Self.pages(paragraphs, book: book, width: width, height: height - 32,
+                          heading: headerHeight > 0 ? headerHeight + 18 : 110,
+                          landscape: landscape, glossLabels: showNewWords, fontSize: fontSize)
     }
 
     /// Splits a chapter into pages the way a printed book does: paragraphs follow one another, and one that
     /// doesn't fit carries on at the top of the next page. Line breaks are worked out by wrapping the words
     /// as WordFlowText does, in the reader's font, so a page holds what the screen shows.
-    static func pages(_ paragraphs: [Paragraph], book: Book, size: CGSize, landscape: Bool, glossLabels: Bool) -> [[PageItem]] {
+    /// `height` is the room for text on a page (the text area less its padding); `heading` is what the chapter
+    /// heading takes on the first page.
+    static func pages(_ paragraphs: [Paragraph], book: Book, width: CGFloat, height: CGFloat, heading: CGFloat,
+                      landscape: Bool, glossLabels: Bool, fontSize: CGFloat = 20) -> [[PageItem]] {
         let whole = paragraphs.map { PageItem(paragraph: $0, words: 0..<Int.max, wordCount: Int.max) }
-        guard size.width > 0, size.height > 0, !paragraphs.isEmpty else { return [whole] }
-        let column = landscape ? (size.width - 64 - 28) / 2 : min(size.width, 720) - 40
-        let available = (size.height - 32 - 64) * 0.97  // padding and page bar, and a little to spare
-        let line = lineHeight(labels: glossLabels)
-        var pages: [[PageItem]] = [], current: [PageItem] = [], used: CGFloat = 120  // the chapter heading
+        guard width > 0, height > 0, !paragraphs.isEmpty else { return [whole] }
+        let column = landscape ? (width - 64 - 28) / 2 : min(width, 720) - 40
+        let available = height - 4  // a little to spare
+        let line = lineHeight(labels: glossLabels, fontSize: fontSize)
+        var pages: [[PageItem]] = [], current: [PageItem] = [], used: CGFloat = heading
         for p in paragraphs {
             let text = p.rendition(p.effectiveLevel(book: book))?.text ?? p.source
-            let starts = lineStarts(text, width: column)  // the first word of each line
+            let starts = lineStarts(text, width: column, fontSize: fontSize)  // the first word of each line
             let count = text.split(whereSeparator: \.isWhitespace).count
             var l = 0
             while l < starts.count {
@@ -213,26 +259,30 @@ struct ReaderView: View {
         return pages.isEmpty ? [whole] : pages
     }
 
-    private static let readerFont: UIFont = {
-        let base = UIFont.systemFont(ofSize: 20)
-        return base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: 20) } ?? base
-    }()
-    private static var wordWidths: [Substring: CGFloat] = [:]
+    private static func readerFont(_ size: CGFloat) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size)
+        return base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? base
+    }
+    /// Word widths already measured, by font size.
+    private static var wordWidths: [CGFloat: [Substring: CGFloat]] = [:]
 
     /// One line of WordFlowText: the font, plus 6 points between lines (10, plus a line for the meanings,
     /// when new words are shown).
-    static func lineHeight(labels: Bool) -> CGFloat {
-        ceil(readerFont.lineHeight) + (labels ? 10 + ceil(WordView.labelFont.lineHeight) : 6)
+    static func lineHeight(labels: Bool, fontSize: CGFloat) -> CGFloat {
+        ceil(readerFont(fontSize).lineHeight) + (labels ? 10 + ceil(WordView.labelFont.lineHeight) : 6)
     }
 
     /// The index of the first word of each line when `text` wraps like WordFlowText (words 5 points apart).
-    static func lineStarts(_ text: String, width: CGFloat) -> [Int] {
+    static func lineStarts(_ text: String, width: CGFloat, fontSize: CGFloat) -> [Int] {
         var starts = [0], x: CGFloat = 0
+        let font = readerFont(fontSize)
+        var known = wordWidths[fontSize] ?? [:]
+        defer { wordWidths[fontSize] = known }
         for (i, word) in text.split(whereSeparator: \.isWhitespace).enumerated() {
             let w: CGFloat
-            if let known = wordWidths[word] { w = known } else {
-                w = ceil((String(word) as NSString).size(withAttributes: [.font: readerFont]).width)
-                wordWidths[word] = w
+            if let k = known[word] { w = k } else {
+                w = ceil((String(word) as NSString).size(withAttributes: [.font: font]).width)
+                known[word] = w
             }
             if x > 0 && x + 5 + w > width { starts.append(i); x = w } else { x += (x > 0 ? 5 : 0) + w }
         }
@@ -259,14 +309,7 @@ struct ReaderView: View {
                 Text(book.level.label(original: book.isOriginal)).font(.headline)
             }
 
-            Menu {
-                // the chapters themselves, not a "Chapter" submenu
-                ForEach(Array(chapters.enumerated()), id: \.offset) { i, ch in
-                    Button { book.currentChapter = i; go(to: nil) } label: {
-                        if i == book.currentChapter { Label(ch.title, systemImage: "checkmark") } else { Text(ch.title) }
-                    }
-                }
-            } label: { Label("Chapters", systemImage: "list.bullet") }
+
         }
     }
 
@@ -282,7 +325,15 @@ struct ReaderView: View {
         learningLemmas = Set(Learner.learning(book.language, in: context, limit: 500).map { $0.lemma.lowercased() })
     }
 
-    private func tapped(_ token: WordToken, _ gloss: Gloss?) {
+    private func tapped(_ token: WordToken, _ gloss: Gloss?, in paragraph: Paragraph) {
+        // shade the sentence, and the sentence in the same place in the other column; a second tap clears it
+        if pick?.paragraph == paragraph.uid && pick?.sentence == token.sentenceIndex {
+            pick = nil
+        } else {
+            let text = paragraph.rendition(paragraph.effectiveLevel(book: book))?.text ?? ""
+            let side = paragraph.side(book: book).map { SentenceShade.counterpart(of: token.sentenceIndex, in: text, side: $0) } ?? []
+            pick = (paragraph.uid, token.sentenceIndex, side)
+        }
         guard let gloss else { card = nil; return }
         card = WordCard(word: token.core, lemma: gloss.lemma, meaning: gloss.meaning,
                         isLearning: learningLemmas.contains(gloss.lemma.lowercased()))
@@ -328,6 +379,55 @@ struct ReaderView: View {
     }
 }
 
+/// Serif text set at the size that fills the space it is given: as large as fits, no larger.
+struct FittedText: View {
+    let text: String
+    /// Sentences to shade (the counterpart of the one the reader tapped).
+    var shaded: [String] = []
+
+    private var attributed: AttributedString {
+        var a = AttributedString(text)
+        for s in shaded where !s.isEmpty {
+            if let r = a.range(of: s) { a[r].backgroundColor = SentenceShade.color; continue }
+            // a sentence split over two pages: shade the part on this page (its start, or its end)
+            let words = s.split(separator: " ")
+            for k in stride(from: words.count - 1, through: 2, by: -1) {
+                let start = words.prefix(k).joined(separator: " "), end = words.suffix(k).joined(separator: " ")
+                if text.hasSuffix(start), let r = a.range(of: start, options: .backwards) { a[r].backgroundColor = SentenceShade.color; break }
+                if text.hasPrefix(end), let r = a.range(of: end) { a[r].backgroundColor = SentenceShade.color; break }
+            }
+        }
+        return a
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            Text(attributed)
+                .font(.system(size: Self.size(text, in: geo.size), design: .serif))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .textSelection(.enabled)
+        }
+    }
+
+    /// The largest font size (between 9 and 32 points) at which `text`, wrapped to the width, is no taller
+    /// than the height. Found by halving the range, measuring with the same serif font.
+    static func size(_ text: String, in box: CGSize) -> CGFloat {
+        guard box.width > 0, box.height > 0 else { return 17 }
+        func height(_ size: CGFloat) -> CGFloat {
+            let base = UIFont.systemFont(ofSize: size)
+            let font = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? base
+            return ceil((text as NSString).boundingRect(with: CGSize(width: box.width, height: .greatestFiniteMagnitude),
+                                                         options: [.usesLineFragmentOrigin], attributes: [.font: font], context: nil).height)
+        }
+        var low: CGFloat = 9, high: CGFloat = 32
+        for _ in 0..<12 {
+            let mid = (low + high) / 2
+            if height(mid) <= box.height { low = mid } else { high = mid }
+        }
+        return low
+    }
+}
+
 /// What one page shows of one paragraph: all of it, or the lines that fit.
 struct PageItem: Identifiable {
     let paragraph: Paragraph
@@ -363,6 +463,9 @@ struct ParagraphRow: View {
     let book: Book
     let landscape: Bool
     let showNewWords: Bool
+    /// The sentence of this paragraph the reader tapped, if any, and its counterpart in the side column.
+    var selectedSentence: Int? = nil
+    var shadedSide: [String] = []
     let learningLemmas: Set<String>
     let onTap: (WordToken, Gloss?) -> Void
     let onDoubleTap: (WordToken, Gloss?) -> Void
@@ -378,17 +481,14 @@ struct ParagraphRow: View {
             if landscape {
                 HStack(alignment: .top, spacing: 28) {
                     target(level).frame(maxWidth: .infinity, alignment: .leading)
-                    // the side column takes its height from the paragraph beside it and its text shrinks to fit,
-                    // so the two columns line up paragraph by paragraph
+                    // the side column takes its height from the paragraph beside it, and its font size is
+                    // worked out so its text fills exactly that height: the two columns line up paragraph by paragraph
                     Color.clear
                         .frame(maxWidth: .infinity)
                         .overlay(alignment: .topLeading) {
-                            Text(paragraph.side(book: book).map { part.share(of: $0) } ?? "\(book.native.name) translation on its way…")
-                                .font(.system(size: 17, design: .serif))
-                                .minimumScaleFactor(0.45)
-                                .foregroundStyle(paragraph.side(book: book) == nil ? .tertiary : .secondary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                .textSelection(.enabled)
+                            let side = paragraph.side(book: book).map { part.share(of: $0) }
+                            FittedText(text: side ?? "\(book.native.name) translation on its way…", shaded: shadedSide)
+                                .foregroundStyle(side == nil ? .tertiary : .secondary)
                         }
                 }
             } else {
@@ -411,7 +511,7 @@ struct ParagraphRow: View {
             if let r = paragraph.rendition(level) {
                 WordFlowText(rendition: r, language: book.language, showNewWords: showNewWords,
                              learningLemmas: learningLemmas, onTap: onTap, onDoubleTap: onDoubleTap,
-                             words: part.isWhole ? nil : words)
+                             words: part.isWhole ? nil : words, selectedSentence: selectedSentence)
                     .task(id: r.text) { onShown(r) }
             } else if let err = generator.failure(paragraph, level) {
                 Button {

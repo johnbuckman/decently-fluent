@@ -6,6 +6,8 @@ struct WordToken: Identifiable, Hashable {
     let text: String
     let core: String
     let sentence: String
+    /// Which sentence of the paragraph the token is in, counting from 0.
+    let sentenceIndex: Int
 
     static func tokens(_ text: String) -> [WordToken] {
         var out: [WordToken] = []
@@ -20,9 +22,10 @@ struct WordToken: Identifiable, Hashable {
             let chunk = String(piece)
             let at = text.range(of: chunk, range: search..<text.endIndex)?.lowerBound ?? search
             search = text.index(at, offsetBy: chunk.count, limitedBy: text.endIndex) ?? text.endIndex
-            let sentence = sentences.first { $0.0.contains(at) }?.1 ?? text
+            let si = sentences.firstIndex { $0.0.contains(at) }
+            let sentence = si.map { sentences[$0].1 } ?? text
             let core = chunk.trimmingCharacters(in: CharacterSet.letters.union(.decimalDigits).inverted)
-            out.append(WordToken(id: i, text: chunk, core: core, sentence: sentence))
+            out.append(WordToken(id: i, text: chunk, core: core, sentence: sentence, sentenceIndex: si ?? 0))
             i += 1
         }
         return out
@@ -36,6 +39,34 @@ struct WordToken: Identifiable, Hashable {
     }
 }
 
+/// The shade of a sentence the reader tapped, and of its counterpart in the other column.
+enum SentenceShade {
+    static let color = Color.accentColor.opacity(0.16)
+
+    /// The sentences of `side` that sit where sentence `index` of `text` sits (by position in the paragraph):
+    /// each side sentence whose middle falls inside it, or else the one at its middle.
+    static func counterpart(of index: Int, in text: String, side: String) -> [String] {
+        func sentences(_ s: String) -> [(range: ClosedRange<Double>, text: String)] {
+            var out: [(ClosedRange<Double>, String)] = []
+            let total = Double(max(s.count, 1))
+            s.enumerateSubstrings(in: s.startIndex..., options: .bySentences) { sub, r, _, _ in
+                guard let sub else { return }
+                let a = Double(s.distance(from: s.startIndex, to: r.lowerBound)) / total
+                let b = Double(s.distance(from: s.startIndex, to: r.upperBound)) / total
+                out.append((a...b, sub.trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
+            return out
+        }
+        let own = sentences(text), other = sentences(side)
+        guard own.indices.contains(index), !other.isEmpty else { return [] }
+        let span = own[index].range
+        let inside = other.filter { span.contains(($0.range.lowerBound + $0.range.upperBound) / 2) }.map(\.text)
+        if !inside.isEmpty { return inside }
+        let middle = (span.lowerBound + span.upperBound) / 2
+        return other.first { $0.range.contains(middle) }.map { [$0.text] } ?? []
+    }
+}
+
 /// The target-language paragraph as tappable words, wrapped like text.
 struct WordFlowText: View {
     let rendition: Rendition
@@ -46,6 +77,8 @@ struct WordFlowText: View {
     let onDoubleTap: (WordToken, Gloss?) -> Void
     /// The words to show, when a page holds only part of the paragraph.
     var words: Range<Int>? = nil
+    /// The sentence the reader tapped, shaded.
+    var selectedSentence: Int? = nil
 
     var body: some View {
         let tokens = WordToken.tokens(rendition.text)
@@ -60,7 +93,8 @@ struct WordFlowText: View {
                 let highlighted = showNewWords && (gloss?.isNew == true || learning)
                 // a phrase's meaning goes under its first word only
                 WordView(token: t, highlighted: highlighted, learning: learning,
-                         meaning: highlighted && m?.first != false ? (gloss?.meaning ?? "") : nil)
+                         meaning: highlighted && m?.first != false ? (gloss?.meaning ?? "") : nil,
+                         selected: t.sentenceIndex == selectedSentence)
                     .onTapGesture(count: 2) { onDoubleTap(t, gloss) }
                     .onTapGesture { onTap(t, gloss) }
             }
@@ -93,11 +127,22 @@ struct WordFlowText: View {
     }
 }
 
+/// The reader's text size in points, set by pinching (ReaderView).
+private struct ReaderFontSizeKey: EnvironmentKey { static let defaultValue: CGFloat = 20 }
+extension EnvironmentValues {
+    var readerFontSize: CGFloat {
+        get { self[ReaderFontSizeKey.self] }
+        set { self[ReaderFontSizeKey.self] = newValue }
+    }
+}
+
 struct WordView: View {
+    @Environment(\.readerFontSize) private var fontSize
     let token: WordToken
     let highlighted: Bool
     let learning: Bool
     let meaning: String?
+    var selected = false
 
     static let labelFont = UIFont.systemFont(ofSize: 11)
 
@@ -113,9 +158,11 @@ struct WordView: View {
     var body: some View {
         UnderLabel(minLabelWidth: labelMinWidth) {
             Text(token.text)
-                .font(.system(size: 20, design: .serif))
+                .font(.system(size: fontSize, design: .serif))
                 .padding(.horizontal, highlighted ? 2 : 0)
                 .background(highlighted ? Color.yellow.opacity(0.45) : .clear, in: RoundedRectangle(cornerRadius: 3))
+                // the tapped sentence: shaded across the gaps between its words too
+                .background(selected ? SentenceShade.color : .clear, in: Rectangle().inset(by: -2.5))
                 .overlay(alignment: .bottom) {
                     if learning && !highlighted {
                         Rectangle().fill(Color.orange.opacity(0.7)).frame(height: 1.5).offset(y: 1)

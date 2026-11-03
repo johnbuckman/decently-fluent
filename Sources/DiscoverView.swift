@@ -41,7 +41,7 @@ struct GuideView: View {
     var stored: StoredProfile
     let onDone: () -> Void
     @State private var step = 0
-    private let steps = 5
+    private let steps = 6
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,10 +49,11 @@ struct GuideView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     switch step {
-                    case 0: languageStep
-                    case 1: kindStep
-                    case 2: levelStep
-                    case 3: interestsStep
+                    case 0: nativeStep
+                    case 1: languageStep
+                    case 2: kindStep
+                    case 3: levelStep
+                    case 4: interestsStep
                     default: timeStep
                     }
                 }
@@ -70,16 +71,21 @@ struct GuideView: View {
         }
     }
 
+    private var nativeStep: some View {
+        let p = stored.profile
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("What is your own language?").font(.title2.weight(.semibold))
+            Text("Word meanings and the side column are in this language.").foregroundStyle(.secondary)
+            ForEach(Language.allCases) { lang in
+                OptionCard(title: lang.name, detail: nil, selected: p.native == lang) { stored.native = lang.rawValue }
+            }
+        }
+    }
+
     private var languageStep: some View {
         let p = stored.profile
         return VStack(alignment: .leading, spacing: 14) {
-            Text("Your language").font(.title2.weight(.semibold))
-            Text("Word meanings and the side column are in this language.").foregroundStyle(.secondary)
-            Picker("Your language", selection: Binding(get: { p.native }, set: { stored.native = $0.rawValue })) {
-                ForEach(Language.allCases) { Text($0.name).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            Text("Which language are you learning?").font(.title2.weight(.semibold)).padding(.top, 8)
+            Text("Which language are you learning?").font(.title2.weight(.semibold))
             ForEach(Language.allCases.filter { $0 != p.native }) { lang in
                 OptionCard(title: lang.name, detail: nil, selected: p.language == lang) { stored.language = lang.rawValue }
             }

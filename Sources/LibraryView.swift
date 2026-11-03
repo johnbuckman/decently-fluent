@@ -49,6 +49,12 @@ struct LibraryView: View {
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
+                    .swipeActions {
+                        Button(role: .destructive) { delete(book) } label: { Label("Delete", systemImage: "trash") }
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) { delete(book) } label: { Label("Delete", systemImage: "trash") }
+                    }
                 }
                     .onDelete { idx in
                         for i in idx { context.delete(books[i]) }
@@ -102,6 +108,11 @@ struct LibraryView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func delete(_ book: Book) {
+        context.delete(book)
+        try? context.save()
     }
 
     private func addSample() {
