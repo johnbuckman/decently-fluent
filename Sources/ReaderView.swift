@@ -14,6 +14,7 @@ struct ReaderView: View {
     @Environment(\.modelContext) private var context
     @State private var generator = Generator.shared
     @State private var showNewWords = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
     /// The text size, changed by pinching and kept for every book.
     @AppStorage("readerFontSize") private var fontSize: Double = 20
     @GestureState private var pinch: CGFloat = 1
@@ -155,13 +156,14 @@ struct ReaderView: View {
         let first = page == 0 && book.currentChapter == 0
         let last = page == count - 1 && book.currentChapter == chapters.count - 1
         return HStack {
-            Button { previous(page: page, pages: pages) } label: { Label("Previous page", systemImage: "chevron.left") }
+            Button { previous(page: page, pages: pages) } label: { Label("Previous page", systemImage: "chevron.left").lineLimit(1).fixedSize() }
                 .disabled(first)
             Spacer()
             Text("Page \(page + 1) of \(count)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
             Spacer()
             Button { next(page: page, pages: pages) } label: {
                 Label(page == count - 1 && !last ? "Next chapter" : "Next page", systemImage: "chevron.right").labelStyle(TrailingIcon())
+                    .lineLimit(1).fixedSize()
             }
             .buttonStyle(.borderedProminent)
             .disabled(last)
@@ -295,7 +297,9 @@ struct ReaderView: View {
                 }
             } label: {
                 HStack(spacing: 4) {
+                    // narrow on a phone, so the new-words and level buttons keep their place beside it
                     Text(book.title).font(.headline).lineLimit(1)
+                        .frame(maxWidth: sizeClass == .compact ? 130 : 320, alignment: .leading)
                     Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 .foregroundStyle(.primary)
@@ -318,7 +322,10 @@ struct ReaderView: View {
                     }
                 }
             } label: {
-                Text(book.level.label(original: book.isOriginal)).font(.headline)
+                // on a phone just the code ("B1"): the full name is in the menu and under the chapter heading
+                Text(sizeClass == .compact ? book.level.rawValue : book.level.label(original: book.isOriginal))
+                    .font(.headline)
+                    .lineLimit(1)
             }
 
 
