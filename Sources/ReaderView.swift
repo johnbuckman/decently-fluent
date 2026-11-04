@@ -32,6 +32,10 @@ struct ReaderView: View {
     /// The measured height of the text area and of the chapter heading, for cutting pages.
     @State private var pageHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
+    /// Only the text: no toolbar, page buttons or status bar (tap the bottom centre to switch).
+    @State private var textOnly = false
+    /// Counts turns made with taps, buttons and keys, so the page curl animates them.
+    @State private var turns = 0
 
     private var chapters: [Chapter] { book.sortedChapters }
     private var chapter: Chapter? { chapters.indices.contains(book.currentChapter) ? chapters[book.currentChapter] : chapters.first }
@@ -43,51 +47,32 @@ struct ReaderView: View {
                 let pages = cut(chapter.sortedParagraphs, width: geo.size.width, landscape: landscape)
                 let page = pageIndex(pages)
                 VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            if page == 0 {
-                                header(chapter, landscape: landscape)
-                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
-                            }
-                            ForEach(pages[page]) { item in
-                                let picked = pick?.paragraph == item.paragraph.uid ? pick : nil
-                                ParagraphRow(paragraph: item.paragraph, words: item.words, wordCount: item.wordCount,
-                                             book: book, landscape: landscape, showNewWords: showNewWords,
-                                             selectedSentences: picked?.target ?? [], shadedSide: picked?.side ?? [],
-                                             learningLemmas: learningLemmas,
-                                             onTap: { tapped($0, $1, in: item.paragraph) }, onDoubleTap: { doubleTapped($0, $1) },
-                                             onTapSide: { tappedSide($0, in: item.paragraph) },
-                                             onShown: { shown(item.paragraph, $0) })
-                            }
-                        }
-                        .padding(.horizontal, landscape ? 32 : 20)
-                        .padding(.vertical, 16)
-                        .frame(maxWidth: landscape ? .infinity : 720)
-                        .frame(maxWidth: .infinity)
+                    // pages curl like a book's: drag a corner, or tap, swipe, the buttons or the arrow keys
+                    PageCurl(place: PagePlace(chapter: book.currentChapter, page: page), turns: turns,
+                             neighbour: { neighbour($0, $1, width: geo.size.width, landscape: landscape) },
+                             style: readerScheme == "dark" ? .dark : readerScheme == "light" ? .light : .unspecified,
+                             onTurn: { place in curled(to: place, width: geo.size.width, landscape: landscape) }) { place in
+                        let shown = place.chapter == book.currentChapter ? pages
+                            : cut(chapters[place.chapter].sortedParagraphs, width: geo.size.width, landscape: landscape)
+                        pageContent(shown, page: min(place.page, shown.count - 1), chapter: chapters[place.chapter],
+                                    landscape: landscape)
                     }
-                    // a page normally fits; it scrolls only when a paragraph is longer than the screen
-                    .scrollBounceBehavior(.basedOnSize)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pageHeight = $0 }
-                    .id("\(book.currentChapter)-\(page)")
-                    pageProgress(pages[page])
-                    pageBar(page: page, pages: pages)
+                    if !textOnly {
+                        pageProgress(pages[page])
+                        pageBar(page: page, pages: pages)
+                    }
                 }
-                // a tap that isn't on a word turns the page: right side forward, left side back
-                .contentShape(Rectangle())
-                .onTapGesture { location in
-                    if card != nil { card = nil; return }
-                    turn(location.x > geo.size.width / 2 ? 1 : -1, pages: pages)
+                // with only the text showing, a tap at the bottom centre brings everything back
+                .overlay(alignment: .bottom) {
+                    if textOnly {
+                        Color.clear.contentShape(Rectangle())
+                            .frame(width: 200, height: 56)
+                            .onTapGesture { withAnimation(.easeInOut(duration: 0.25)) { textOnly = false } }
+                            .accessibilityLabel("Show the toolbar and page buttons")
+                            .accessibilityAddTraits(.isButton)
+                    }
                 }
-                // pinch to make the text bigger or smaller; the pages are re-cut when the fingers lift
-                .simultaneousGesture(MagnifyGesture()
-                    .updating($pinch) { v, state, _ in state = v.magnification }
-                    .onEnded { v in fontSize = min(36, max(14, (fontSize * v.magnification).rounded())) })
-                .scaleEffect(pinch, anchor: .center)
-                .environment(\.readerFontSize, fontSize)
-                .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { v in
-                    guard abs(v.translation.width) > abs(v.translation.height) * 1.5, abs(v.translation.width) > 50 else { return }
-                    turn(v.translation.width < 0 ? 1 : -1, pages: pages)
-                })
                 .focusable()
                 .focusEffectDisabled()
                 .onKeyPress(.rightArrow) { turn(1, pages: pages); return .handled }
@@ -121,6 +106,9 @@ struct ReaderView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        .toolbar(textOnly ? .hidden : .visible, for: .navigationBar)
+        .statusBarHidden(textOnly)
+        .persistentSystemOverlays(textOnly ? .hidden : .automatic)
         .onAppear {
             refreshLearning()
             book.updateProgress()
@@ -130,6 +118,63 @@ struct ReaderView: View {
     }
 
     // MARK: - Pieces
+
+    /// One page: its paragraphs (and the chapter heading on the first) and tappable words. Shown inside the page curl, which is UIKit, so it is given the reader's environment here.
+    private func pageContent(_ pages: [[PageItem]], page: Int, chapter: Chapter, landscape: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if page == 0 {
+                    header(chapter, landscape: landscape)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
+                }
+                ForEach(pages[page]) { item in
+                    let picked = pick?.paragraph == item.paragraph.uid ? pick : nil
+                    ParagraphRow(paragraph: item.paragraph, words: item.words, wordCount: item.wordCount,
+                                 book: book, landscape: landscape, showNewWords: showNewWords,
+                                 selectedSentences: picked?.target ?? [], shadedSide: picked?.side ?? [],
+                                 learningLemmas: learningLemmas,
+                                 onTap: { tapped($0, $1, in: item.paragraph) }, onDoubleTap: { doubleTapped($0, $1) },
+                                 onTapSide: { tappedSide($0, in: item.paragraph) },
+                                 onShown: { shown(item.paragraph, $0) })
+                }
+            }
+            .padding(.horizontal, landscape ? 32 : 20)
+            .padding(.vertical, 16)
+            .frame(maxWidth: landscape ? .infinity : 720)
+            .frame(maxWidth: .infinity)
+        }
+        // a page normally fits; it scrolls only when a paragraph is longer than the screen
+        .scrollBounceBehavior(.basedOnSize)
+        // pages turn by dragging or swiping them, or with the buttons below; a tap off a word just closes its card
+        .contentShape(Rectangle())
+        .onTapGesture { card = nil }
+        // pinch to make the text bigger or smaller; the pages are re-cut when the fingers lift
+        .simultaneousGesture(MagnifyGesture()
+            .updating($pinch) { v, state, _ in state = v.magnification }
+            .onEnded { v in fontSize = min(36, max(14, (fontSize * v.magnification).rounded())) })
+        .scaleEffect(pinch, anchor: .center)
+        .environment(\.readerFontSize, fontSize)
+        .environment(\.horizontalSizeClass, sizeClass)
+        .modelContext(context)
+    }
+
+    /// The page before (`step` -1) or after (+1) a place, across chapters; nil at either end of the book.
+    private func neighbour(_ place: PagePlace, _ step: Int, width: CGFloat, landscape: Bool) -> PagePlace? {
+        func count(_ c: Int) -> Int { cut(chapters[c].sortedParagraphs, width: width, landscape: landscape).count }
+        if step > 0 {
+            if place.page + 1 < count(place.chapter) { return PagePlace(chapter: place.chapter, page: place.page + 1) }
+            return place.chapter + 1 < chapters.count ? PagePlace(chapter: place.chapter + 1, page: 0) : nil
+        }
+        if place.page > 0 { return PagePlace(chapter: place.chapter, page: place.page - 1) }
+        return place.chapter > 0 ? PagePlace(chapter: place.chapter - 1, page: max(0, count(place.chapter - 1) - 1)) : nil
+    }
+
+    /// The reader curled the page by hand: go to where it landed.
+    private func curled(to place: PagePlace, width: CGFloat, landscape: Bool) {
+        let pages = cut(chapters[place.chapter].sortedParagraphs, width: width, landscape: landscape)
+        book.currentChapter = place.chapter
+        go(to: pages.indices.contains(place.page) ? pages[place.page].first : nil)
+    }
 
     private func header(_ chapter: Chapter, landscape: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -179,7 +224,14 @@ struct ReaderView: View {
             Button { previous(page: page, pages: pages) } label: { Label("Previous page", systemImage: "chevron.left").lineLimit(1).fixedSize() }
                 .disabled(first)
             Spacer()
-            Text("Page \(page + 1) of \(count)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+            // tap the page number for only the text, on the whole screen
+            Button { withAnimation(.easeInOut(duration: 0.25)) { textOnly = true } } label: {
+                Text("Page \(page + 1) of \(count)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, 6).padding(.vertical, 8).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows only the text")
             Spacer()
             Button { next(page: page, pages: pages) } label: {
                 Label(page == count - 1 && !last ? "Next chapter" : "Next page", systemImage: "chevron.right").labelStyle(TrailingIcon())
@@ -244,7 +296,9 @@ struct ReaderView: View {
         if step > 0 { next(page: page, pages: pages) } else { previous(page: page, pages: pages) }
     }
 
+
     private func next(page: Int, pages: [[PageItem]]) {
+        turns += 1
         if page + 1 < pages.count {
             go(to: pages[page + 1].first)
         } else if book.currentChapter + 1 < chapters.count {
@@ -254,6 +308,7 @@ struct ReaderView: View {
     }
 
     private func previous(page: Int, pages: [[PageItem]]) {
+        turns += 1
         if page > 0 {
             go(to: pages[page - 1].first)
         } else if book.currentChapter > 0 {
@@ -294,9 +349,11 @@ struct ReaderView: View {
                 let gap: CGFloat = current.isEmpty ? 0 : 18
                 let fit = Int((available - used - gap) / line)
                 let rest = starts.count - l
-                if fit >= rest || (fit >= 2 && rest - fit >= 2) || (current.isEmpty && fit >= 1) {
-                    // all of the rest, or as many lines as fit (never leaving a single line behind)
-                    let take = fit >= rest ? rest : (current.isEmpty ? max(1, fit) : fit)
+                // all of the rest; or as many lines as fit, keeping two for the next page so a single line is
+                // never left behind; or, at the top of a page, whatever fits
+                let split = min(fit, rest - 2)
+                if fit >= rest || split >= 2 || (current.isEmpty && fit >= 1) {
+                    let take = fit >= rest ? rest : (split >= 2 ? split : max(1, fit))
                     let end = l + take < starts.count ? starts[l + take] : count
                     current.append(PageItem(paragraph: p, words: starts[l]..<end, wordCount: count))
                     used += gap + CGFloat(take) * line
