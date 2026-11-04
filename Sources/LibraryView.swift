@@ -4,6 +4,16 @@ import UniformTypeIdentifiers
 
 @main
 struct DecentlyFluentApp: App {
+    init() {
+        // development: write pages ahead for the most recommended books (Pregenerated.swift), then quit
+        if let out = ProcessInfo.processInfo.environment["DF_PREGENERATE"] {
+            Task { @MainActor in
+                await Pregenerator.run(to: URL(fileURLWithPath: out))
+                exit(0)
+            }
+        }
+    }
+
     var body: some Scene {
         WindowGroup { LibraryView() }
             .modelContainer(for: [Book.self, Chapter.self, Paragraph.self, LearnerWord.self])
@@ -20,10 +30,24 @@ struct LibraryView: View {
     @State private var showDiscover = false
     @State private var error: String?
     @State private var path: [Book] = []
+    @State private var ready: ReadyBook?
+    var stored = StoredProfile()
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                let shelf = readyBooks
+                if !shelf.isEmpty {
+                    Section {
+                        ForEach(shelf) { r in
+                            if let b = Catalog.shared.book(id: r.book) {
+                                Button { ready = r } label: { ReadyRow(ready: r, book: b) }.buttonStyle(.plain)
+                            }
+                        }
+                    } header: { Text("Recommended books") } footer: {
+                        Text("The first pages are already written, so these open ready to read.")
+                    }
+                }
                 Section {
                     Button { showDiscover = true } label: {
                         Label("Find a book for me…", systemImage: "sparkle.magnifyingglass")
@@ -86,6 +110,12 @@ struct LibraryView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showWords) { MyWordsView() }
             .fullScreenCover(isPresented: $showDiscover) { DiscoverView { path = [$0] } }
+            .sheet(item: $ready) { r in
+                if let b = Catalog.shared.book(id: r.book) {
+                    ReadySheet(ready: r, book: b, profile: stored.profile) { ready = nil; path = [$0] }
+                }
+            }
+            .task { await ReadyShelf.shared.refresh() }
             .sheet(item: $pendingImport) { imported in
                 ImportChoiceView(imported: imported) { lang, source, native in
                     pendingImport = nil
@@ -104,6 +134,21 @@ struct LibraryView: View {
                 Button("OK") { error = nil }
             } message: { Text($0) }
         }
+    }
+
+    /// Books with pages written ahead for readers of this language: those in the language being learned first,
+    /// leaving out ones already in the library.
+    private var readyBooks: [ReadyBook] {
+        let profile = stored.profile
+        let have = Set(books.map { "\($0.title)|\($0.language.rawValue)" })
+        return ReadyShelf.shared.books
+            .filter { $0.native == profile.native.rawValue }
+            .filter { r in !have.contains("\(Catalog.shared.book(id: r.book)?.title ?? "")|\(r.language)") }
+            .enumerated().sorted { a, b in
+                let (x, y) = (a.element.lang == profile.language, b.element.lang == profile.language)
+                return x != y ? x : a.offset < b.offset
+            }
+            .map(\.element).prefix(8).map { $0 }
     }
 
     private func importBook(_ url: URL) {
@@ -258,6 +303,48 @@ struct MyWordsView: View {
                 try? context.save()
             }
             .tint(w.known ? .orange : .green)
+        }
+    }
+}
+
+/// A book on the "Recommended books" shelf.
+struct ReadyRow: View {
+    let ready: ReadyBook
+    let book: CatalogBook
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(book.title).font(.headline).lineLimit(2)
+            Text("\(book.author) · in \(ready.lang.name) · ready at \(ready.levels.joined(separator: ", "))")
+                .font(.subheadline).foregroundStyle(.secondary)
+            if let blurb = Catalog.shared.blurb(book.id) {
+                Text(blurb).font(.callout).lineLimit(3).padding(.top, 2)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// The book page for a ready book, set to the language its pages are in, at a level they were written at.
+struct ReadySheet: View {
+    let ready: ReadyBook
+    let book: CatalogBook
+    let profile: ReadingProfile
+    let onAdd: (Book) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        var p = profile
+        p.language = ready.lang
+        let levels = ready.levels.compactMap(Level.init(rawValue:))
+        if !levels.contains(p.level), let nearest = levels.min(by: {
+            abs(Level.allCases.firstIndex(of: $0)! - Level.allCases.firstIndex(of: profile.level)!)
+                < abs(Level.allCases.firstIndex(of: $1)! - Level.allCases.firstIndex(of: profile.level)!)
+        }) { p.level = nearest }
+        return NavigationStack {
+            BookPreview(book: book, profile: p, onAdd: onAdd)
+                .navigationDestination(for: Principle.Key.self) { PrincipleView(principle: Research.principle($0)) }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         }
     }
 }

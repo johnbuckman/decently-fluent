@@ -172,6 +172,21 @@ final class Catalog {
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
+    /// A few sentences in English about the book (tools/blurbs.py), if it has them.
+    func blurb(_ id: Int) -> String? {
+        if let hit = blurbs[id] { return hit }
+        var out: String?
+        var stmt: OpaquePointer?
+        if let db, sqlite3_prepare_v2(db, "SELECT text FROM blurbs WHERE id = ?", -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_int64(stmt, 1, Int64(id))
+            if sqlite3_step(stmt) == SQLITE_ROW, let t = sqlite3_column_text(stmt, 0) { out = String(cString: t) }
+            sqlite3_finalize(stmt)
+        }
+        blurbs[id] = .some(out)
+        return out
+    }
+    private var blurbs: [Int: String?] = [:]
+
     func book(id: Int) -> CatalogBook? { query("SELECT \(Self.columns) FROM books WHERE id = ?", [id]).first }
 
     private func query(_ sql: String, _ args: [Any]) -> [CatalogBook] {

@@ -46,6 +46,7 @@ enum LLMSettings {
     }
 
     static func model(_ p: Provider) -> String {
+        if let m = ProcessInfo.processInfo.environment["DF_MODEL"], !m.isEmpty { return m }
         let m = UserDefaults.standard.string(forKey: "model.\(p.rawValue)") ?? ""
         return m.isEmpty ? p.defaultModel : m
     }
@@ -121,6 +122,9 @@ enum LLM {
         return URLSession(configuration: c)
     }()
 
+    /// Tokens used by Claude since launch, for the pre-generator's cost report.
+    nonisolated(unsafe) static var usage = (input: 0, output: 0)
+
     static func claude(system: String, user: String, key: String, model: String) async throws -> String {
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         req.httpMethod = "POST"
@@ -144,6 +148,10 @@ enum LLM {
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard code == 200 else { throw LLMError.http(code, String(decoding: data, as: UTF8.self)) }
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw LLMError.badAnswer("not JSON") }
+        if let u = obj["usage"] as? [String: Any] {
+            usage.input += u["input_tokens"] as? Int ?? 0
+            usage.output += u["output_tokens"] as? Int ?? 0
+        }
         if obj["stop_reason"] as? String == "refusal" { throw LLMError.refused }
         let blocks = obj["content"] as? [[String: Any]] ?? []
         let text = blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined()

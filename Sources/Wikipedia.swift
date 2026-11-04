@@ -27,6 +27,8 @@ enum Wikipedia {
         return found
     }
 
+    static let otherWork = /(?i)\((\d{4} )?(film|tv series|television series|miniseries|series|comics?|comic book|musical|opera|album|song|video game|band|serial|téléfilm|fernsehserie|película|serie|fumetto)\)/
+
     /// Headings of the plot section, by Wikipedia language.
     private static let plotHeadings: [Language: [String]] = [
         .english: ["Plot", "Plot summary", "Synopsis", "Summary", "Story"],
@@ -48,6 +50,8 @@ enum Wikipedia {
             let words = Set(title.lowercased().split(separator: " ").map(String.init).filter { $0.count > 3 })
             let hitWords = Set(hit.title.lowercased().split(separator: " ").map(String.init))
             guard words.isEmpty || !words.isDisjoint(with: hitWords) || hit.title.lowercased().contains(title.lowercased()) else { continue }
+            // not a film, series or comic of the same name ("Pride and Prejudice (2026 TV series)")
+            if hit.title.firstMatch(of: Self.otherWork) != nil { continue }
             guard let page: ExtractAnswer = await get(lang, ["action": "query", "prop": "extracts", "explaintext": "1",
                                                              "redirects": "1", "titles": hit.title]),
                   let text = page.query.pages.values.first?.extract, !text.isEmpty,

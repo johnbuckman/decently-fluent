@@ -25,6 +25,11 @@ final class Generator {
     /// Seconds the current request is expected to take.
     var expectedSeconds: Double { max(8, Double(current?.words ?? 0) * Self.secondsPerWord + 4) }
     var lastError: String?
+    /// Whether this generator writes the side column too. The pre-generator runs one generator per level at once,
+    /// and only one of them needs to.
+    var writesSide = true
+    /// Most paragraphs in one request. The pre-generator allows more, as plays and dialogue have many short ones.
+    var batchParagraphs = Generator.batchParagraphs
 
     private struct Job { var book: Book; var level: Level; var paragraphs: [Paragraph] }
     private var queue: [Job] = []
@@ -89,11 +94,49 @@ final class Generator {
         }
     }
 
+    /// Lines up any published translations with the book's chapters, up to about `words` words of it (normally done
+    /// chapter by chapter as it is read).
+    func lineUpAll(_ book: Book, words limit: Int? = nil) async {
+        if book.humanTargetEdition != nil || book.humanSideEdition != nil { await matchChapters(book) }
+        var words = 0
+        for ch in book.sortedChapters {
+            if let limit, words >= limit { break }
+            words += ch.paragraphs.reduce(0) { $0 + $1.source.split(separator: " ").count }
+            if ch.humanTargetText != nil || ch.humanSideText != nil { await lineUp(ch, book: book) }
+        }
+    }
+
+    /// Writes the book at `level` from the start, up to about `words` words of it (the whole book if nil),
+    /// for the pre-generator. Paragraphs that fail are left for the reader's own generator.
+    func generateAll(_ book: Book, level: Level, words limit: Int? = nil, progress: (Int) -> Void = { _ in }) async {
+        // batches stay within a chapter: answers are matched by paragraph index, which starts again in each chapter
+        var chapters: [[Paragraph]] = [], words = 0
+        for ch in book.sortedChapters {
+            if let limit, words >= limit { break }
+            var ps: [Paragraph] = []
+            for p in ch.sortedParagraphs {
+                if let limit, words >= limit { break }
+                ps.append(p)
+                words += p.source.split(separator: " ").count
+            }
+            chapters.append(ps)
+        }
+        var done = 0
+        for ps in chapters {
+            done += ps.filter { $0.rendition(level) != nil }.reduce(0) { $0 + $1.source.split(separator: " ").count }
+            for batch in batches(ps.filter { $0.rendition(level) == nil }) {
+                await generate(batch, level: level, book: book)
+                done += batch.reduce(0) { $0 + $1.source.split(separator: " ").count }
+                progress(done)
+            }
+        }
+    }
+
     private func batches(_ ps: [Paragraph]) -> [[Paragraph]] {
         var out: [[Paragraph]] = [], cur: [Paragraph] = [], words = 0
         for p in ps {
             let w = p.source.split(separator: " ").count
-            if !cur.isEmpty && (cur.count >= Self.batchParagraphs || words + w > Self.batchWords) {
+            if !cur.isEmpty && (cur.count >= batchParagraphs || words + w > Self.batchWords) {
                 out.append(cur); cur = []; words = 0
             }
             cur.append(p); words += w
@@ -122,7 +165,7 @@ final class Generator {
         guard let context = book.modelContext else { return }
         let lang = book.language
         let given = batch.allSatisfy { Self.given($0, level: level, book: book) != nil }
-        let needSide = !book.sideIsSource && batch.contains { $0.sideTranslation == nil }
+        let needSide = writesSide && !book.sideIsSource && batch.contains { $0.sideTranslation == nil }
         let system = Self.systemPrompt(level: level, book: book, given: given, needSide: needSide,
                                        learning: Learner.learning(lang, in: context))
         let user = userPrompt(batch, level: level, book: book, given: given)

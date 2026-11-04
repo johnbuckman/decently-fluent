@@ -319,6 +319,9 @@ struct RecommendationRow: View {
                     Spacer()
                     ScoreBadge(score: rec.score)
                 }
+                if let blurb = Catalog.shared.blurb(rec.book.id) {
+                    Text(blurb).font(.callout).foregroundStyle(.primary.opacity(0.85)).lineLimit(4)
+                }
                 ForEach(rec.reasons.filter(\.good).prefix(2)) { r in
                     Label(r.text, systemImage: "checkmark").font(.caption).foregroundStyle(.green).lineLimit(2)
                 }
@@ -362,6 +365,9 @@ struct CatalogRow: View {
                 Text([book.author, book.words.map { "\($0 / 1000)k words" } ?? "", book.lang.name + (book.translated ? " translation" : "")]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
+                if let blurb = Catalog.shared.blurb(book.id) {
+                    Text(blurb).font(.caption).lineLimit(3).padding(.top, 2)
+                }
             }
         }
     }
@@ -414,6 +420,9 @@ struct BookPreview: View {
                     Text([book.author, book.years.isEmpty ? "" : "(\(book.years))"].joined(separator: " ")).foregroundStyle(.secondary)
                     if let w = book.words {
                         Text("About \(w.formatted()) words\(book.chapters.map { " · \($0) chapters" } ?? "")").font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let blurb = Catalog.shared.blurb(book.id) {
+                        Text(blurb).font(.callout).padding(.top, 6)
                     }
                 }
                 .padding(.vertical, 4)
@@ -528,11 +537,7 @@ struct BookPreview: View {
         loading = true
         defer { loading = false }
         do {
-            let file = try await Gutenberg.download(book.gutenberg)
-            var b = try Importer.read(url: file)
-            b.chapters = Gutenberg.dropGutenbergMatter(b.chapters)
-            if b.title.isEmpty || b.title.hasPrefix("pg") { b.title = book.title }
-            if b.author.isEmpty { b.author = book.author }
+            let b = try await CatalogImport.read(book)
             imported = b
             if !book.measured { fit = LearnerFit(b) }
         } catch {
@@ -540,27 +545,51 @@ struct BookPreview: View {
         }
     }
 
-    /// Saves the book to learn `lang` from, with any published translation it can use:
-    /// into `lang` for a retold book, and into the reader's language for the side column.
     private func add(_ lang: Language) async {
         guard let imported else { return }
-        let native = profile.native
-        var target: (CatalogBook, Data)?, side: (CatalogBook, Data)?
-        if lang != book.lang, let e = editions[lang] {
-            adding = "Getting the \(lang.name) \(e.translated ? "translation" : "original")…"
-            target = await Self.edition(Catalog.shared.volumes(of: book.id, in: lang)).map { (e, $0) }
-        }
-        if book.lang != native, let e = editions[native] {
-            adding = "Getting the \(native.name) \(e.translated ? "translation" : "original")…"
-            side = await Self.edition(Catalog.shared.volumes(of: book.id, in: native)).map { (e, $0) }
-        }
+        let b = await CatalogImport.add(imported, from: book, learning: lang, native: profile.native, level: profile.level,
+                                        in: context) { adding = $0 }
         adding = nil
-        let b = BookStore.store(imported, language: lang, source: book.lang, native: native, in: context)
-        b.level = profile.level
-        if let (e, data) = target { b.humanTargetEdition = data; b.targetTranslator = Self.credit(e) }
-        if let (e, data) = side { b.humanSideEdition = data; b.sideTranslator = Self.credit(e) }
-        try? context.save()
         onAdd(b)
+    }
+}
+
+/// Getting a catalog book: its text from Gutenberg, any published translations it can use, and any pages
+/// already written for it (Pregenerated.swift).
+@MainActor
+enum CatalogImport {
+    static func read(_ book: CatalogBook) async throws -> ImportedBook {
+        let file = try await Gutenberg.download(book.gutenberg)
+        var b = try Importer.read(url: file)
+        b.chapters = Gutenberg.dropGutenbergMatter(b.chapters)
+        if b.title.isEmpty || b.title.hasPrefix("pg") { b.title = book.title }
+        if b.author.isEmpty { b.author = book.author }
+        return b
+    }
+
+    /// Saves the book to learn `lang` from, with any published translation it can use:
+    /// into `lang` for a retold book, and into the reader's language for the side column.
+    /// Where pages have already been written for it, they come too, and the translations are already lined up.
+    static func add(_ imported: ImportedBook, from book: CatalogBook, learning lang: Language, native: Language, level: Level,
+                    usePages: Bool = true, in context: ModelContext, status: (String) -> Void) async -> Book {
+        let editions = Catalog.shared.bestEditions(of: book.id)
+        let pages = usePages ? await Pregenerated.fetch(book.id, learning: lang, native: native) : nil
+        var target: (CatalogBook, Data)?, side: (CatalogBook, Data)?
+        if pages == nil, lang != book.lang, let e = editions[lang] {
+            status("Getting the \(lang.name) \(e.translated ? "translation" : "original")…")
+            target = await edition(Catalog.shared.volumes(of: book.id, in: lang)).map { (e, $0) }
+        }
+        if pages == nil, book.lang != native, let e = editions[native] {
+            status("Getting the \(native.name) \(e.translated ? "translation" : "original")…")
+            side = await edition(Catalog.shared.volumes(of: book.id, in: native)).map { (e, $0) }
+        }
+        let b = BookStore.store(imported, language: lang, source: book.lang, native: native, in: context)
+        b.level = level
+        if let (e, data) = target { b.humanTargetEdition = data; b.targetTranslator = credit(e) }
+        if let (e, data) = side { b.humanSideEdition = data; b.sideTranslator = credit(e) }
+        if let pages { pages.apply(to: b) }
+        try? context.save()
+        return b
     }
 
     /// The translator's name; empty for the author's original.

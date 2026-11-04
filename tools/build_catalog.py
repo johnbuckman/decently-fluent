@@ -465,6 +465,9 @@ def main():
             m and m["archaic"], m and m["dialect"], m and m["cov2k"], m and m["cov5k"], 1 if b["translated"] else 0, b["translator"]))
     db.execute("INSERT INTO books_fts(books_fts) VALUES('rebuild')")
     db.execute("INSERT INTO meta VALUES ('built', ?)", (time.strftime("%Y-%m-%d"),))
+    # the English descriptions written for the measured books (tools/blurbs.py)
+    import blurbs
+    blurbs.install(db)
     db.commit()
     db.execute("VACUUM")
     db.close()
