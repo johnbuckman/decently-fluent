@@ -229,6 +229,8 @@ final class Book {
         progress = total > 0 ? Double(before + readingWord) / Double(total) : 0
     }
     var createdAt: Date = Date()
+    /// The Project Gutenberg book it came from, if it came from the catalog.
+    var gutenbergID: Int?
     var introducedData: Data?
     @Relationship(deleteRule: .cascade, inverse: \Chapter.book) var chapters: [Chapter] = []
 

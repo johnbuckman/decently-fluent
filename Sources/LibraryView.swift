@@ -30,25 +30,19 @@ struct LibraryView: View {
     @State private var showDiscover = false
     @State private var error: String?
     @State private var path: [Book] = []
-    @State private var ready: ReadyBook?
+    @State private var showReady = false
+    @State private var editMode: EditMode = .inactive
     var stored = StoredProfile()
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                let shelf = readyBooks
-                if !shelf.isEmpty {
-                    Section {
-                        ForEach(shelf) { r in
-                            if let b = Catalog.shared.book(id: r.book) {
-                                Button { ready = r } label: { ReadyRow(ready: r, book: b) }.buttonStyle(.plain)
-                            }
-                        }
-                    } header: { Text("Recommended books") } footer: {
-                        Text("The first pages are already written, so these open ready to read.")
-                    }
-                }
                 Section {
+                    if !readyBooks.isEmpty {
+                        Button { showReady = true } label: {
+                            Label("Recommended books (already prepared for you)", systemImage: "books.vertical")
+                        }
+                    }
                     Button { showDiscover = true } label: {
                         Label("Find a book for me…", systemImage: "sparkle.magnifyingglass")
                     }
@@ -68,7 +62,7 @@ struct LibraryView: View {
                     NavigationLink(value: book) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(book.title).font(.headline)
-                            Text([book.author, "\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))", "\(book.chapters.count) chapters"]
+                            Text([book.author, "\(book.language.name)\(book.isOriginal ? " original" : "") · \(book.level.label(original: book.isOriginal))", book.chapters.count == 1 ? "1 chapter" : "\(book.chapters.count) chapters"]
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.subheadline).foregroundStyle(.secondary)
                             if book.progress > 0 || book.currentChapter > 0 {
@@ -94,6 +88,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .environment(\.editMode, $editMode)
             .navigationTitle("Decently Fluent")
             .navigationDestination(for: Book.self) { ReaderView(book: $0) }
             .toolbar {
@@ -101,6 +96,13 @@ struct LibraryView: View {
                     HStack {
                         Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         Button { showWords = true } label: { Label("My words", systemImage: "character.book.closed") }
+                        // deleting books without a swipe (on a Mac there is none)
+                        if !books.isEmpty {
+                            Button { withAnimation { editMode = editMode.isEditing ? .inactive : .active } } label: {
+                                Label(editMode.isEditing ? "Done editing" : "Edit books",
+                                      systemImage: editMode.isEditing ? "checkmark" : "pencil")
+                            }
+                        }
                     }
                 }
             }
@@ -110,10 +112,8 @@ struct LibraryView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showWords) { MyWordsView() }
             .fullScreenCover(isPresented: $showDiscover) { DiscoverView { path = [$0] } }
-            .sheet(item: $ready) { r in
-                if let b = Catalog.shared.book(id: r.book) {
-                    ReadySheet(ready: r, book: b, profile: stored.profile) { ready = nil; path = [$0] }
-                }
+            .fullScreenCover(isPresented: $showReady) {
+                RecommendedBooksView(books: readyBooks, profile: stored.profile) { showReady = false; path = [$0] }
             }
             .task { await ReadyShelf.shared.refresh() }
             .sheet(item: $pendingImport) { imported in
@@ -148,7 +148,7 @@ struct LibraryView: View {
                 let (x, y) = (a.element.lang == profile.language, b.element.lang == profile.language)
                 return x != y ? x : a.offset < b.offset
             }
-            .map(\.element).prefix(8).map { $0 }
+            .map(\.element)
     }
 
     private func importBook(_ url: URL) {
@@ -296,55 +296,109 @@ struct MyWordsView: View {
             Text(w.known ? "learned" : "seen \(w.cleanSightings)/\(LearnerWord.sightingsToKnow)")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        .swipeActions {
-            Button(w.known ? "Still learning" : "I know it") {
-                w.known.toggle()
-                if !w.known { w.cleanSightings = 0; w.cleanDays = [] }
-                try? context.save()
-            }
-            .tint(w.known ? .orange : .green)
+        .swipeActions { knownButton(w).tint(w.known ? .orange : .green) }
+        .contextMenu { knownButton(w) }
+    }
+
+    private func knownButton(_ w: LearnerWord) -> some View {
+        Button(w.known ? "Still learning" : "I know it") {
+            w.known.toggle()
+            if !w.known { w.cleanSightings = 0; w.cleanDays = [] }
+            try? context.save()
         }
     }
 }
 
-/// A book on the "Recommended books" shelf.
+/// A book on the "Recommended books" list, as a card.
 struct ReadyRow: View {
     let ready: ReadyBook
     let book: CatalogBook
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(book.title).font(.headline).lineLimit(2)
-            Text("\(book.author) · in \(ready.lang.name) · ready at \(ready.levels.joined(separator: ", "))")
-                .font(.subheadline).foregroundStyle(.secondary)
-            if let blurb = Catalog.shared.blurb(book.id) {
-                Text(blurb).font(.callout).lineLimit(3).padding(.top, 2)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(book.title).font(.title3.weight(.semibold)).foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                Text(book.author).font(.subheadline).foregroundStyle(.secondary)
+                if let blurb = Catalog.shared.blurb(book.id) {
+                    Text(blurb).font(.body).foregroundStyle(.primary.opacity(0.85))
+                        .multilineTextAlignment(.leading).lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+                HStack(spacing: 6) {
+                    ForEach(ready.levels, id: \.self) { l in
+                        Text(l).font(.caption.weight(.semibold))
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.12)))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    Text("ready to read").font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
             }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
     }
 }
 
-/// The book page for a ready book, set to the language its pages are in, at a level they were written at.
-struct ReadySheet: View {
-    let ready: ReadyBook
-    let book: CatalogBook
+/// The books whose first pages are already written, by language (the one being learned first), and each one's
+/// page, set to the language its pages are in at the level they were written at nearest the reader's.
+struct RecommendedBooksView: View {
+    let books: [ReadyBook]
     let profile: ReadingProfile
     let onAdd: (Book) -> Void
     @Environment(\.dismiss) private var dismiss
 
+    private var languages: [Language] {
+        var seen: [Language] = []
+        for b in books where !seen.contains(b.lang) { seen.append(b.lang) }
+        return seen
+    }
+
     var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    Text("Their first pages are already written at the levels shown, so they open ready to read.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    ForEach(languages) { lang in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("In \(lang.name)").font(.title2.weight(.bold))
+                            ForEach(books.filter { $0.lang == lang }) { r in
+                                if let b = Catalog.shared.book(id: r.book) {
+                                    NavigationLink(value: r) { ReadyRow(ready: r, book: b) }.buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Recommended books")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: ReadyBook.self) { r in
+                if let b = Catalog.shared.book(id: r.book) { BookPreview(book: b, profile: Self.profile(profile, for: r), onAdd: onAdd) }
+            }
+            .navigationDestination(for: Principle.Key.self) { PrincipleView(principle: Research.principle($0)) }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }
+    }
+
+    static func profile(_ profile: ReadingProfile, for ready: ReadyBook) -> ReadingProfile {
         var p = profile
         p.language = ready.lang
         let levels = ready.levels.compactMap(Level.init(rawValue:))
-        if !levels.contains(p.level), let nearest = levels.min(by: {
-            abs(Level.allCases.firstIndex(of: $0)! - Level.allCases.firstIndex(of: profile.level)!)
-                < abs(Level.allCases.firstIndex(of: $1)! - Level.allCases.firstIndex(of: profile.level)!)
-        }) { p.level = nearest }
-        return NavigationStack {
-            BookPreview(book: book, profile: p, onAdd: onAdd)
-                .navigationDestination(for: Principle.Key.self) { PrincipleView(principle: Research.principle($0)) }
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-        }
+        func rank(_ l: Level) -> Int { abs(Level.allCases.firstIndex(of: l)! - Level.allCases.firstIndex(of: profile.level)!) }
+        if !levels.contains(p.level), let nearest = levels.min(by: { rank($0) < rank($1) }) { p.level = nearest }
+        return p
     }
 }

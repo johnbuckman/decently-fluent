@@ -23,7 +23,8 @@ struct ReaderView: View {
     @GestureState private var pinch: CGFloat = 1
     @State private var card: WordCard?
     /// The sentence the reader tapped: its paragraph, its place there, and the side column's matching sentences.
-    @State private var pick: (paragraph: UUID, sentence: Int, side: [String])?
+    /// The tapped sentence: its paragraph, the sentences shaded in the target column and those in the side column.
+    @State private var pick: (paragraph: UUID, target: Set<Int>, side: [String])?
     @State private var sighted: Set<String> = []
     @State private var learningLemmas: Set<String> = []
     /// The reader's size at the last layout, for paging from the buttons and keys.
@@ -52,9 +53,10 @@ struct ReaderView: View {
                                 let picked = pick?.paragraph == item.paragraph.uid ? pick : nil
                                 ParagraphRow(paragraph: item.paragraph, words: item.words, wordCount: item.wordCount,
                                              book: book, landscape: landscape, showNewWords: showNewWords,
-                                             selectedSentence: picked?.sentence, shadedSide: picked?.side ?? [],
+                                             selectedSentences: picked?.target ?? [], shadedSide: picked?.side ?? [],
                                              learningLemmas: learningLemmas,
                                              onTap: { tapped($0, $1, in: item.paragraph) }, onDoubleTap: { doubleTapped($0, $1) },
+                                             onTapSide: { tappedSide($0, in: item.paragraph) },
                                              onShown: { shown(item.paragraph, $0) })
                             }
                         }
@@ -342,13 +344,26 @@ struct ReaderView: View {
     /// The levels, listed directly (no "Level" submenu).
     private func levelMenu(@ViewBuilder label: () -> some View) -> some View {
         Menu {
-            ForEach(Level.allCases) { l in
-                Button { book.level = l } label: {
-                    if l == book.level { Label(l.label(original: book.isOriginal), systemImage: "checkmark") }
-                    else { Text(l.label(original: book.isOriginal)) }
+            // a ticked box: the next pages are already written at that level; an hourglass: they'll be written on demand
+            Picker("Level", selection: Binding(get: { book.level }, set: { book.level = $0 })) {
+                ForEach(Level.allCases) { l in
+                    Label(l.label(original: book.isOriginal), systemImage: isReady(l) ? "checkmark.square" : "hourglass").tag(l)
                 }
             }
+            .pickerStyle(.inline)
         } label: { label() }
+    }
+
+    /// Whether the next few pages from the reader's place are already written at a level.
+    private func isReady(_ level: Level) -> Bool {
+        guard let chapter else { return false }
+        var words = 0
+        for p in chapter.sortedParagraphs where p.index >= book.readingParagraph {
+            guard words < Generator.lookaheadWords else { break }
+            if p.rendition(level) == nil { return false }
+            words += p.source.split(separator: " ").count
+        }
+        return true
     }
 
     @ToolbarContentBuilder
@@ -375,6 +390,14 @@ struct ReaderView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
+            #if targetEnvironment(macCatalyst)
+            // a mouse can't pinch: text size buttons (also ⌘- and ⌘+)
+            Button { fontSize = max(14, fontSize - 2) } label: { Label("Smaller text", systemImage: "textformat.size.smaller") }
+                .keyboardShortcut("-", modifiers: .command)
+            Button { fontSize = min(36, fontSize + 2) } label: { Label("Larger text", systemImage: "textformat.size.larger") }
+                .keyboardShortcut("=", modifiers: .command)
+            #endif
+
             // dark or light pages, whatever the system is set to
             Button { readerScheme = colorScheme == .dark ? "light" : "dark" } label: {
                 Label(colorScheme == .dark ? "Light pages" : "Dark pages", systemImage: colorScheme == .dark ? "sun.max" : "moon")
@@ -410,16 +433,28 @@ struct ReaderView: View {
 
     private func tapped(_ token: WordToken, _ gloss: Gloss?, in paragraph: Paragraph) {
         // shade the sentence, and the sentence in the same place in the other column; a second tap clears it
-        if pick?.paragraph == paragraph.uid && pick?.sentence == token.sentenceIndex {
+        if pick?.paragraph == paragraph.uid && pick?.target == [token.sentenceIndex] {
             pick = nil
         } else {
             let text = paragraph.rendition(paragraph.effectiveLevel(book: book))?.text ?? ""
             let side = paragraph.side(book: book).map { SentenceShade.counterpart(of: token.sentenceIndex, in: text, side: $0) } ?? []
-            pick = (paragraph.uid, token.sentenceIndex, side)
+            pick = (paragraph.uid, [token.sentenceIndex], side)
         }
         guard let gloss else { card = nil; return }
         card = WordCard(word: token.core, lemma: gloss.lemma, meaning: gloss.meaning,
                         isLearning: learningLemmas.contains(gloss.lemma.lowercased()))
+    }
+
+    /// A tap on a sentence in the side column (landscape): shade it, and the sentences beside it in the
+    /// language being learned. A second tap clears it.
+    private func tappedSide(_ sentence: String, in paragraph: Paragraph) {
+        guard let side = paragraph.side(book: book),
+              let text = paragraph.rendition(paragraph.effectiveLevel(book: book))?.text else { return }
+        let all = SentenceShade.sentences(side)
+        guard let index = all.firstIndex(where: { $0.text == sentence || $0.text.contains(sentence) || sentence.contains($0.text) }) else { return }
+        if pick?.paragraph == paragraph.uid && pick?.side == [all[index].text] { pick = nil; return }
+        pick = (paragraph.uid, Set(SentenceShade.counterparts(of: index, in: side, other: text)), [all[index].text])
+        card = nil
     }
 
     /// Double-tap: "I don't know this word." Show it, and remember it.
@@ -469,6 +504,8 @@ struct FittedText: View {
     var shaded: [String] = []
     /// Words to mark faintly: the meanings of the new words highlighted in the other column.
     var faint: [String] = []
+    /// Called with the sentence tapped, when the text is tappable.
+    var onTapSentence: ((String) -> Void)? = nil
 
     private var attributed: AttributedString {
         var a = AttributedString(text)
@@ -501,11 +538,42 @@ struct FittedText: View {
 
     var body: some View {
         GeometryReader { geo in
-            Text(attributed)
-                .font(.system(size: Self.size(text, in: geo.size), design: .serif))
+            let size = Self.size(text, in: geo.size)
+            let t = Text(attributed)
+                .font(.system(size: size, design: .serif))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .textSelection(.enabled)
+            if let onTapSentence {
+                t.contentShape(Rectangle())
+                    .onTapGesture { point in
+                        if let s = Self.sentence(at: point, in: text, size: size, width: geo.size.width) { onTapSentence(s) }
+                    }
+            } else {
+                t.textSelection(.enabled)
+            }
         }
+    }
+
+    private static func serif(_ size: CGFloat) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size)
+        return base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? base
+    }
+
+    /// The sentence at a point, laying the text out as it is drawn (same font, size and width).
+    static func sentence(at point: CGPoint, in text: String, size: CGFloat, width: CGFloat) -> String? {
+        let storage = NSTextStorage(string: text, attributes: [.font: serif(size)])
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        var fraction: CGFloat = 0
+        let i = layout.characterIndex(for: point, in: container, fractionOfDistanceBetweenInsertionPoints: &fraction)
+        guard i < storage.length, let at = Range(NSRange(location: i, length: 0), in: text)?.lowerBound else { return nil }
+        var found: String?
+        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { sub, r, _, stop in
+            if r.contains(at) || r.upperBound == at { found = sub?.trimmingCharacters(in: .whitespacesAndNewlines); stop = true }
+        }
+        return found
     }
 
     /// The largest font size (between 9 and 32 points) at which `text`, wrapped to the width, is no taller
@@ -513,8 +581,7 @@ struct FittedText: View {
     static func size(_ text: String, in box: CGSize) -> CGFloat {
         guard box.width > 0, box.height > 0 else { return 17 }
         func height(_ size: CGFloat) -> CGFloat {
-            let base = UIFont.systemFont(ofSize: size)
-            let font = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? base
+            let font = serif(size)
             return ceil((text as NSString).boundingRect(with: CGSize(width: box.width, height: .greatestFiniteMagnitude),
                                                          options: [.usesLineFragmentOrigin], attributes: [.font: font], context: nil).height)
         }
@@ -563,11 +630,13 @@ struct ParagraphRow: View {
     let landscape: Bool
     let showNewWords: Bool
     /// The sentence of this paragraph the reader tapped, if any, and its counterpart in the side column.
-    var selectedSentence: Int? = nil
+    var selectedSentences: Set<Int> = []
     var shadedSide: [String] = []
     let learningLemmas: Set<String>
     let onTap: (WordToken, Gloss?) -> Void
     let onDoubleTap: (WordToken, Gloss?) -> Void
+    /// A sentence of the side column was tapped.
+    var onTapSide: (String) -> Void = { _ in }
     let onShown: (Rendition) -> Void
     @Environment(\.modelContext) private var context
     private var generator: Generator { Generator.shared }
@@ -597,7 +666,8 @@ struct ParagraphRow: View {
                         .overlay(alignment: .topLeading) {
                             let side = paragraph.side(book: book).map { part.share(of: $0) }
                             FittedText(text: side ?? "\(book.native.name) translation on its way…", shaded: shadedSide,
-                                       faint: showNewWords ? faintTerms(level) : [])
+                                       faint: showNewWords ? faintTerms(level) : [],
+                                       onTapSentence: side == nil ? nil : onTapSide)
                                 .foregroundStyle(side == nil ? .tertiary : .secondary)
                         }
                 }
@@ -621,7 +691,7 @@ struct ParagraphRow: View {
             if let r = paragraph.rendition(level) {
                 WordFlowText(rendition: r, language: book.language, showNewWords: showNewWords,
                              learningLemmas: learningLemmas, onTap: onTap, onDoubleTap: onDoubleTap,
-                             words: part.isWhole ? nil : words, selectedSentence: selectedSentence)
+                             words: part.isWhole ? nil : words, selectedSentences: selectedSentences)
                     .task(id: r.text) { onShown(r) }
             } else if let err = generator.failure(paragraph, level) {
                 Button {

@@ -43,27 +43,35 @@ struct WordToken: Identifiable, Hashable {
 enum SentenceShade {
     static let color = Color.accentColor.opacity(0.16)
 
-    /// The sentences of `side` that sit where sentence `index` of `text` sits (by position in the paragraph):
-    /// each side sentence whose middle falls inside it, or else the one at its middle.
-    static func counterpart(of index: Int, in text: String, side: String) -> [String] {
-        func sentences(_ s: String) -> [(range: ClosedRange<Double>, text: String)] {
-            var out: [(ClosedRange<Double>, String)] = []
-            let total = Double(max(s.count, 1))
-            s.enumerateSubstrings(in: s.startIndex..., options: .bySentences) { sub, r, _, _ in
-                guard let sub else { return }
-                let a = Double(s.distance(from: s.startIndex, to: r.lowerBound)) / total
-                let b = Double(s.distance(from: s.startIndex, to: r.upperBound)) / total
-                out.append((a...b, sub.trimmingCharacters(in: .whitespacesAndNewlines)))
-            }
-            return out
+    /// A text's sentences, with where each sits in it (as a share of its length, 0…1).
+    static func sentences(_ s: String) -> [(range: ClosedRange<Double>, text: String)] {
+        var out: [(ClosedRange<Double>, String)] = []
+        let total = Double(max(s.count, 1))
+        s.enumerateSubstrings(in: s.startIndex..., options: .bySentences) { sub, r, _, _ in
+            guard let sub else { return }
+            let a = Double(s.distance(from: s.startIndex, to: r.lowerBound)) / total
+            let b = Double(s.distance(from: s.startIndex, to: r.upperBound)) / total
+            out.append((a...b, sub.trimmingCharacters(in: .whitespacesAndNewlines)))
         }
-        let own = sentences(text), other = sentences(side)
-        guard own.indices.contains(index), !other.isEmpty else { return [] }
+        return out
+    }
+
+    /// Which sentences of `other` sit where sentence `index` of `text` sits (by position in the paragraph):
+    /// each one whose middle falls inside it, or else the one at its middle.
+    static func counterparts(of index: Int, in text: String, other: String) -> [Int] {
+        let own = sentences(text), theirs = sentences(other)
+        guard own.indices.contains(index), !theirs.isEmpty else { return [] }
         let span = own[index].range
-        let inside = other.filter { span.contains(($0.range.lowerBound + $0.range.upperBound) / 2) }.map(\.text)
+        let inside = theirs.indices.filter { span.contains((theirs[$0].range.lowerBound + theirs[$0].range.upperBound) / 2) }
         if !inside.isEmpty { return inside }
         let middle = (span.lowerBound + span.upperBound) / 2
-        return other.first { $0.range.contains(middle) }.map { [$0.text] } ?? []
+        return theirs.indices.first { theirs[$0].range.contains(middle) }.map { [$0] } ?? []
+    }
+
+    /// The sentences of `side` that sit where sentence `index` of `text` sits.
+    static func counterpart(of index: Int, in text: String, side: String) -> [String] {
+        let theirs = sentences(side)
+        return counterparts(of: index, in: text, other: side).map { theirs[$0].text }
     }
 }
 
@@ -77,8 +85,8 @@ struct WordFlowText: View {
     let onDoubleTap: (WordToken, Gloss?) -> Void
     /// The words to show, when a page holds only part of the paragraph.
     var words: Range<Int>? = nil
-    /// The sentence the reader tapped, shaded.
-    var selectedSentence: Int? = nil
+    /// The sentences shaded: the one the reader tapped, or those beside the one tapped in the other column.
+    var selectedSentences: Set<Int> = []
 
     var body: some View {
         let tokens = WordToken.tokens(rendition.text)
@@ -94,7 +102,7 @@ struct WordFlowText: View {
                 // a phrase's meaning goes under its first word only
                 WordView(token: t, highlighted: highlighted, learning: learning,
                          meaning: highlighted && m?.first != false ? (gloss?.meaning ?? "") : nil,
-                         selected: t.sentenceIndex == selectedSentence)
+                         selected: selectedSentences.contains(t.sentenceIndex))
                     .onTapGesture(count: 2) { onDoubleTap(t, gloss) }
                     .onTapGesture { onTap(t, gloss) }
             }

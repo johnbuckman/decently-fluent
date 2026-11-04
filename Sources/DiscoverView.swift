@@ -323,7 +323,7 @@ struct RecommendationRow: View {
                     Text(blurb).font(.callout).foregroundStyle(.primary.opacity(0.85)).lineLimit(4)
                 }
                 ForEach(rec.reasons.filter(\.good).prefix(2)) { r in
-                    Label(r.text, systemImage: "checkmark").font(.caption).foregroundStyle(.green).lineLimit(2)
+                    Label(r.text, systemImage: "checkmark").font(.caption).foregroundStyle(Color.good).lineLimit(2)
                 }
             }
             .padding(.vertical, 2)
@@ -392,6 +392,7 @@ struct BookPreview: View {
     let profile: ReadingProfile
     let onAdd: (Book) -> Void
     @Environment(\.modelContext) private var context
+    @Query(sort: \Book.createdAt, order: .reverse) private var library: [Book]
     @State private var imported: ImportedBook?
     @State private var fit: LearnerFit?
     @State private var error: String?
@@ -402,6 +403,19 @@ struct BookPreview: View {
     @State private var wikiExpanded = false
 
     private var editions: [Language: CatalogBook] { Catalog.shared.bestEditions(of: book.id) }
+
+    /// Its first pages are already written for readers of this language (the "pages" release).
+    private var isReady: Bool {
+        ReadyShelf.shared.books.contains { $0.book == book.id && $0.native == profile.native.rawValue }
+    }
+
+    /// This book's copies already in the library (books added before the Gutenberg number was kept are matched by title).
+    private var copies: [Book] {
+        func stem(_ t: String) -> String {
+            (t.components(separatedBy: CharacterSet(charactersIn: ":;")).first ?? t).trimmingCharacters(in: .whitespaces).lowercased()
+        }
+        return library.filter { $0.gutenbergID == book.id || ($0.gutenbergID == nil && stem($0.title) == stem(book.title)) }
+    }
 
     private var rec: Recommendation? {
         guard book.measured else { return nil }
@@ -467,7 +481,7 @@ struct BookPreview: View {
             } else if let fit {
                 Section("For learners") {
                     Label(fit.verdict.rawValue, systemImage: fit.verdict == .hard ? "exclamationmark.triangle" : "checkmark.seal")
-                        .foregroundStyle(fit.verdict == .hard ? .orange : .green)
+                        .foregroundStyle(fit.verdict == .hard ? Color.orange : Color.good)
                     ForEach(Array(fit.notes.enumerated()), id: \.offset) { _, n in
                         ReasonRow(reason: Reason(good: n.good, text: n.text, principle: nil))
                     }
@@ -517,8 +531,19 @@ struct BookPreview: View {
                 } else if let error {
                     Text(error).foregroundStyle(.orange)
                 } else {
+                    // already in the library: open it, or add it again in another language
+                    ForEach(copies) { copy in
+                        Button { onAdd(copy) } label: {
+                            Label("\(copy.progress > 0 || copy.currentChapter > 0 ? "Continue reading" : "Start reading") in \(copy.language.name)",
+                                  systemImage: "book")
+                        }
+                    }
                     Button { Task { await load() } } label: {
-                        HStack { Label("Get this book", systemImage: "arrow.down.circle"); if loading { Spacer(); ProgressView() } }
+                        HStack {
+                            Label(copies.isEmpty ? (isReady ? "Read this book now" : "Get this book") : "Read it in another language",
+                                  systemImage: copies.isEmpty ? (isReady ? "book" : "arrow.down.circle") : "plus.circle")
+                            if loading { Spacer(); ProgressView() }
+                        }
                     }
                     .disabled(loading)
                 }
@@ -585,6 +610,7 @@ enum CatalogImport {
         }
         let b = BookStore.store(imported, language: lang, source: book.lang, native: native, in: context)
         b.level = level
+        b.gutenbergID = book.id
         if let (e, data) = target { b.humanTargetEdition = data; b.targetTranslator = credit(e) }
         if let (e, data) = side { b.humanSideEdition = data; b.sideTranslator = credit(e) }
         if let pages { pages.apply(to: b) }
@@ -615,7 +641,7 @@ struct ReasonRow: View {
     var body: some View {
         let row = HStack(alignment: .top, spacing: 10) {
             Image(systemName: reason.good ? "plus.circle.fill" : "minus.circle")
-                .foregroundStyle(reason.good ? .green : .orange)
+                .foregroundStyle(reason.good ? Color.good : Color.orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text(reason.text).font(.subheadline).foregroundStyle(.primary)
                 if let key = reason.principle {
@@ -672,4 +698,11 @@ struct PrincipleView: View {
         .navigationTitle(principle.title)
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+extension Color {
+    /// Green for good news in text: dark enough to read on white, light enough on black.
+    static let good = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0.45, green: 0.85, blue: 0.52, alpha: 1)
+        : UIColor(red: 0.08, green: 0.45, blue: 0.20, alpha: 1) })
 }
