@@ -66,10 +66,10 @@ struct LibraryView: View {
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.subheadline).foregroundStyle(.secondary)
                             if book.progress > 0 || book.currentChapter > 0 {
-                                HStack(spacing: 8) {
-                                    ProgressView(value: min(1, book.progress)).frame(maxWidth: 160)
-                                    Text("Chapter \(book.currentChapter + 1) of \(book.chapters.count) · \(Int((book.progress * 100).rounded()))%")
-                                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                                // side by side where they fit, the words under the bar where they don't (larger text)
+                                ViewThatFits(in: .horizontal) {
+                                    HStack(spacing: 8) { progressBar(book); progressText(book).fixedSize() }
+                                    VStack(alignment: .leading, spacing: 4) { progressBar(book); progressText(book) }
                                 }
                                 .padding(.top, 2)
                             }
@@ -134,6 +134,15 @@ struct LibraryView: View {
                 Button("OK") { error = nil }
             } message: { Text($0) }
         }
+    }
+
+    private func progressBar(_ book: Book) -> some View {
+        ProgressView(value: min(1, book.progress)).frame(maxWidth: 160)
+    }
+
+    private func progressText(_ book: Book) -> some View {
+        Text("Chapter \(book.currentChapter + 1) of \(book.chapters.count) · \(Int((book.progress * 100).rounded()))%")
+            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
     }
 
     /// Books with pages written ahead for readers of this language: those in the language being learned first,
@@ -293,11 +302,20 @@ struct MyWordsView: View {
                 Text(w.meaning).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(w.known ? "learned" : "seen \(w.cleanSightings)/\(LearnerWord.sightingsToKnow)")
+            Text(w.known ? "learned" : Self.progress(w))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .swipeActions { knownButton(w).tint(w.known ? .orange : .green) }
         .contextMenu { knownButton(w) }
+    }
+
+    /// A word counts as learned after enough sightings, spread over more than one day.
+    static func progress(_ w: LearnerWord) -> String {
+        if w.cleanSightings < LearnerWord.sightingsToKnow {
+            return "seen \(w.cleanSightings) of \(LearnerWord.sightingsToKnow) times"
+        }
+        let days = LearnerWord.daysToKnow - w.cleanDays.count
+        return "see it again on \(days == 1 ? "another day" : "\(days) more days")"
     }
 
     private func knownButton(_ w: LearnerWord) -> some View {

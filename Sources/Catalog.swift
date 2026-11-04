@@ -78,13 +78,16 @@ enum Category: String, CaseIterable, Identifiable {
     }
 }
 
-final class Catalog {
+/// The bundled catalog. Used from the main thread and from background work (recommendations are worked out off
+/// the main thread), so the connection is opened serialized and the description cache is behind a lock.
+final class Catalog: @unchecked Sendable {
     static let shared = Catalog()
     private var db: OpaquePointer?
+    private let lock = NSLock()
 
     private init() {
         guard let path = Bundle.main.path(forResource: "catalog", ofType: "sqlite") else { return }
-        sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil)
+        sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nil)
         editionIDs = loadEditions()
     }
 
@@ -174,6 +177,7 @@ final class Catalog {
 
     /// A few sentences in English about the book (tools/blurbs.py), if it has them.
     func blurb(_ id: Int) -> String? {
+        lock.lock(); defer { lock.unlock() }
         if let hit = blurbs[id] { return hit }
         var out: String?
         var stmt: OpaquePointer?

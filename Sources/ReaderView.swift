@@ -217,30 +217,45 @@ struct ReaderView: View {
     }
 
     private func pageBar(page: Int, pages: [[PageItem]]) -> some View {
+        // full labels where they fit; with large text on a phone, shorter ones, so the bar never pushes the page
+        // wider than the screen
+        ViewThatFits(in: .horizontal) {
+            pageBarRow(page: page, pages: pages, short: false)
+            pageBarRow(page: page, pages: pages, short: true)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 10)
+    }
+
+    private func pageBarRow(page: Int, pages: [[PageItem]], short: Bool) -> some View {
         let count = pages.count
         let first = page == 0 && book.currentChapter == 0
         let last = page == count - 1 && book.currentChapter == chapters.count - 1
+        let nextTitle = page == count - 1 && !last ? (short ? "Chapter" : "Next chapter") : (short ? "Next" : "Next page")
         return HStack {
-            Button { previous(page: page, pages: pages) } label: { Label("Previous page", systemImage: "chevron.left").lineLimit(1).fixedSize() }
-                .disabled(first)
-            Spacer()
+            Button { previous(page: page, pages: pages) } label: {
+                Label("Previous page", systemImage: "chevron.left").labelStyle(short ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
+                    .lineLimit(1).fixedSize()
+            }
+            .disabled(first)
+            Spacer(minLength: 8)
             // tap the page number for only the text, on the whole screen
             Button { withAnimation(.easeInOut(duration: 0.25)) { textOnly = true } } label: {
-                Text("Page \(page + 1) of \(count)").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                Text(short ? "\(page + 1) / \(count)" : "Page \(page + 1) of \(count)")
+                    .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
                     .lineLimit(1).fixedSize()
                     .padding(.horizontal, 6).padding(.vertical, 8).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Page \(page + 1) of \(count)")
             .accessibilityHint("Shows only the text")
-            Spacer()
+            Spacer(minLength: 8)
             Button { next(page: page, pages: pages) } label: {
-                Label(page == count - 1 && !last ? "Next chapter" : "Next page", systemImage: "chevron.right").labelStyle(TrailingIcon())
+                Label(nextTitle, systemImage: "chevron.right").labelStyle(TrailingIcon())
                     .lineLimit(1).fixedSize()
             }
             .buttonStyle(.borderedProminent)
             .disabled(last)
         }
-        .padding(.horizontal, 20).padding(.vertical, 10)
     }
 
     /// While this page's text is being written: a bar, how many paragraphs are done, and a time estimate.
@@ -668,6 +683,13 @@ struct PageItem: Identifiable {
         let to = self.words.upperBound >= wordCount ? words.count : words.count * self.words.upperBound / wordCount
         return words[from..<max(from, to)].joined(separator: " ")
     }
+}
+
+/// A label style chosen at run time.
+struct AnyLabelStyle: LabelStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: LabelStyle>(_ style: S) { make = { AnyView(Label($0).labelStyle(style)) } }
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
 }
 
 struct TrailingIcon: LabelStyle {

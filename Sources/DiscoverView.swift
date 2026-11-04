@@ -159,7 +159,11 @@ struct GuideView: View {
                         if on { s.remove(c.rawValue) } else { s.insert(c.rawValue) }
                         stored.interests = s.sorted().joined(separator: ",")
                     } label: {
-                        Label(c.name, systemImage: c.symbol)
+                        // icons in a fixed-width column, so the names line up, and wrap under each other
+                        HStack(spacing: 10) {
+                            Image(systemName: c.symbol).frame(width: 22)
+                            Text(c.name).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        }
                             .font(.subheadline)
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .padding(.horizontal, 12)
@@ -177,9 +181,21 @@ struct GuideView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("How long do you read each day?").font(.title2.weight(.semibold))
             Text("We use this to estimate how long each book will take.").foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 10)], spacing: 10) {
+            // three to a row on a phone: short labels, no room for the round check mark of the larger cards
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
                 ForEach([10, 15, 20, 30, 45, 60], id: \.self) { m in
-                    OptionCard(title: "\(m) min", detail: nil, selected: stored.minutes == m) { stored.minutes = m }
+                    let on = stored.minutes == m
+                    Button { stored.minutes = m } label: {
+                        Text("\(m) min")
+                            .font(.body.weight(on ? .semibold : .medium))
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .foregroundStyle(on ? Color.accentColor : .primary)
+                            .background(on ? Color.accentColor.opacity(0.1) : Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(on ? Color.accentColor : .clear, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
             ResearchNote(.quantity)
@@ -228,6 +244,7 @@ struct ResearchNote: View {
                     Text(principle.finding).font(.footnote).foregroundStyle(.secondary).lineLimit(4)
                     Text(Self.shortCite(principle.sources.first ?? "")).font(.caption2).foregroundStyle(.tertiary)
                 }
+                Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
             .padding(14)
