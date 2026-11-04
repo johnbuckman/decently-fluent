@@ -133,7 +133,7 @@ enum Recommender {
         if let wpc = b.wordsPerChapter, b.chapters ?? 0 > 1 {
             let minutes = max(1, wpc / p.wordsPerMinute)
             total += 0.10 * (minutes <= p.minutesPerDay ? 1 : minutes <= p.minutesPerDay * 2 ? 0.5 : 0)
-            if minutes <= p.minutesPerDay { reasons.append(Reason(good: true, text: "A chapter fits in one sitting (about \(minutes) minutes)", principle: .quantity)) }
+            if minutes <= p.minutesPerDay { reasons.append(Reason(good: true, text: "A chapter fits in one sitting (about \(minutes) minute\(minutes == 1 ? "" : "s"))", principle: .quantity)) }
         }
 
         // dialogue and sentence length: the plainest kind of text

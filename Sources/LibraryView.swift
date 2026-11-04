@@ -372,7 +372,10 @@ struct RecommendedBooksView: View {
                             Text("In \(lang.name)").font(.title2.weight(.bold))
                             ForEach(books.filter { $0.lang == lang }) { r in
                                 if let b = Catalog.shared.book(id: r.book) {
-                                    NavigationLink(value: r) { ReadyRow(ready: r, book: b) }.buttonStyle(.plain)
+                                    NavigationLink {
+                                        BookPreview(book: b, profile: Self.profile(profile, for: r), onAdd: onAdd)
+                                    } label: { ReadyRow(ready: r, book: b) }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -385,9 +388,6 @@ struct RecommendedBooksView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Recommended books")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: ReadyBook.self) { r in
-                if let b = Catalog.shared.book(id: r.book) { BookPreview(book: b, profile: Self.profile(profile, for: r), onAdd: onAdd) }
-            }
             .navigationDestination(for: Principle.Key.self) { PrincipleView(principle: Research.principle($0)) }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         }
