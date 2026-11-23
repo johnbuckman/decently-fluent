@@ -7,8 +7,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "0.1.7"
-    CURRENT_PROJECT_VERSION: "8"
+    MARKETING_VERSION: "0.1.8"
+    CURRENT_PROJECT_VERSION: "9"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
@@ -28,6 +28,8 @@ targets:
         buildPhase: none
     dependencies:
       - sdk: libsqlite3.tbd
+      # "Decently Fluent" in other apps' share sheets: opens a shared web page in the browser
+      - target: DecentlyFluentShare
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.decentespresso.decentlyfluent
@@ -41,3 +43,23 @@ targets:
         INFOPLIST_FILE: Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+  DecentlyFluentShare:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ShareExtension
+        excludes: [Info.plist]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.decentespresso.decentlyfluent.share
+        PRODUCT_NAME: DecentlyFluentShare
+        PRODUCT_MODULE_NAME: DecentlyFluentShare
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES

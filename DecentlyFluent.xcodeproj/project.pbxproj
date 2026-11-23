@@ -11,6 +11,8 @@
 		2E5E465EB278526E94EB0FEA /* Learning.swift in Sources */ = {isa = PBXBuildFile; fileRef = B177A84863335162960BB1AF /* Learning.swift */; };
 		325DAC340017A3A79ACC670D /* Research.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE215EC76FA1545148FF006B /* Research.swift */; };
 		387F5E6C8AFC0161FC2965F0 /* Catalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B50004F815996F1FF6812A9E /* Catalog.swift */; };
+		3B3482FF57E6743E89ACA481 /* DecentlyFluentShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B06D2A457DB028E11B1CDC03 /* DecentlyFluentShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3C1794E972E9624951A32D82 /* WebTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE823DEE7EACB7B4A4E20310 /* WebTranslator.swift */; };
 		410614A161DE6E4B65F4302D /* ImportChoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F09F94CCB058B43E1C514D /* ImportChoiceView.swift */; };
 		4A124497098189620CC12AD3 /* Pregenerated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E1396AFF1EEAEE12387A93E /* Pregenerated.swift */; };
 		4F1856FF35315AFDD8D6E24B /* Importer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2639F26696A9E7787D117F44 /* Importer.swift */; };
@@ -20,24 +22,53 @@
 		663C304766F06AA594F2AE46 /* Gutenberg.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1445B3549C1850729781449 /* Gutenberg.swift */; };
 		8774D0B84EB5D75B55768144 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D803C0FBBE05B49042A5D513 /* LibraryView.swift */; };
 		8F9C6037540A506B1EDA4320 /* Recommender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64505268242E29C1B72D8C94 /* Recommender.swift */; };
+		A41832F9D249CA8A4161F003 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 187E5A3FE5ECD39A0532C254 /* ShareViewController.swift */; };
 		A53E6CED843CA72617293AA8 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393D3C545B9CABAE7299F6AE /* ReaderView.swift */; };
 		A6B58F31B43187C2808FBC10 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 587FEBCACBFDC7BA392835C6 /* libsqlite3.tbd */; };
+		A98DDE988C8041D68FBAEB32 /* WebBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9759E3BFEDE28C56AC4F5FF /* WebBrowserView.swift */; };
 		AC88FE466EBBCAE06A5B1341 /* Wikipedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8149E7B9D85B737801396E58 /* Wikipedia.swift */; };
 		ADB1940C982CE04C9CB0BABF /* LLM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F392E4DB8A0377F7479FE1 /* LLM.swift */; };
 		AE0736753CE1351552166848 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0CD16FC36092AE7DFE4D0574 /* Assets.xcassets */; };
+		AE173DDBCBE36DD8EFCE64E4 /* WebScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499D3D971892275316D621E4 /* WebScript.swift */; };
 		AFD36DED55A499DC066B4474 /* WordFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AEB75BFE3C32B58B0C0CC7 /* WordFlow.swift */; };
 		C34F91A108BFBBE139408CAA /* LearnerFit.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE35D9362C3D106C33A738E /* LearnerFit.swift */; };
 		F70A0843369A8B9816CF033D /* catalog.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = CE4CF4736EBC156B66D6FFBB /* catalog.sqlite */; };
 		FB976DB2AB9B5F65AE56A384 /* Generator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FBE562F5154679F6545022C /* Generator.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		5B03EC9BC404440B57530CC5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AE20CCE28B042D6598C1E882 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8052CB2AF71D7B09D4FAE618;
+			remoteInfo = DecentlyFluentShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1BACC16A3EBC526CBF54F158 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3B3482FF57E6743E89ACA481 /* DecentlyFluentShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		04AEB75BFE3C32B58B0C0CC7 /* WordFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordFlow.swift; sourceTree = "<group>"; };
 		0CD16FC36092AE7DFE4D0574 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		187E5A3FE5ECD39A0532C254 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		2639F26696A9E7787D117F44 /* Importer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Importer.swift; sourceTree = "<group>"; };
 		26F392E4DB8A0377F7479FE1 /* LLM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLM.swift; sourceTree = "<group>"; };
 		3620C63795B1A1563CFFFD3D /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		393D3C545B9CABAE7299F6AE /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
+		499D3D971892275316D621E4 /* WebScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebScript.swift; sourceTree = "<group>"; };
 		587FEBCACBFDC7BA392835C6 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		64505268242E29C1B72D8C94 /* Recommender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recommender.swift; sourceTree = "<group>"; };
 		8149E7B9D85B737801396E58 /* Wikipedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wikipedia.swift; sourceTree = "<group>"; };
@@ -46,6 +77,7 @@
 		9E1396AFF1EEAEE12387A93E /* Pregenerated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pregenerated.swift; sourceTree = "<group>"; };
 		AB8015A141BEBCEE22D2CA72 /* SampleStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleStory.swift; sourceTree = "<group>"; };
 		AE215EC76FA1545148FF006B /* Research.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Research.swift; sourceTree = "<group>"; };
+		B06D2A457DB028E11B1CDC03 /* DecentlyFluentShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = DecentlyFluentShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1445B3549C1850729781449 /* Gutenberg.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gutenberg.swift; sourceTree = "<group>"; };
 		B177A84863335162960BB1AF /* Learning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Learning.swift; sourceTree = "<group>"; };
 		B50004F815996F1FF6812A9E /* Catalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
@@ -53,7 +85,9 @@
 		CD194461655A5FC4A118EC67 /* PageCurl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageCurl.swift; sourceTree = "<group>"; };
 		CE4CF4736EBC156B66D6FFBB /* catalog.sqlite */ = {isa = PBXFileReference; lastKnownFileType = file; path = catalog.sqlite; sourceTree = "<group>"; };
 		D803C0FBBE05B49042A5D513 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		D9759E3BFEDE28C56AC4F5FF /* WebBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBrowserView.swift; sourceTree = "<group>"; };
 		EC9613E521A95F4395F1F209 /* DecentlyFluent.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DecentlyFluent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE823DEE7EACB7B4A4E20310 /* WebTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebTranslator.swift; sourceTree = "<group>"; };
 		F11D8735D6A29D88B1794C3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FCE35D9362C3D106C33A738E /* LearnerFit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnerFit.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -70,6 +104,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		048FF1C2929666AE5320C021 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				187E5A3FE5ECD39A0532C254 /* ShareViewController.swift */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
 		26A9A88C61F8FD118430D74C /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -100,6 +142,9 @@
 				64505268242E29C1B72D8C94 /* Recommender.swift */,
 				AE215EC76FA1545148FF006B /* Research.swift */,
 				AB8015A141BEBCEE22D2CA72 /* SampleStory.swift */,
+				D9759E3BFEDE28C56AC4F5FF /* WebBrowserView.swift */,
+				499D3D971892275316D621E4 /* WebScript.swift */,
+				EE823DEE7EACB7B4A4E20310 /* WebTranslator.swift */,
 				8149E7B9D85B737801396E58 /* Wikipedia.swift */,
 				04AEB75BFE3C32B58B0C0CC7 /* WordFlow.swift */,
 			);
@@ -118,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				EC9613E521A95F4395F1F209 /* DecentlyFluent.app */,
+				B06D2A457DB028E11B1CDC03 /* DecentlyFluentShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -126,6 +172,7 @@
 			isa = PBXGroup;
 			children = (
 				26A9A88C61F8FD118430D74C /* Resources */,
+				048FF1C2929666AE5320C021 /* ShareExtension */,
 				4161203FB75E78DC16D016DD /* Sources */,
 				77822553D501F495FF3BD00E /* Frameworks */,
 				C9869AC3EA3070EA80CA47E3 /* Products */,
@@ -135,6 +182,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		8052CB2AF71D7B09D4FAE618 /* DecentlyFluentShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EBA6E324BE466681AED4A337 /* Build configuration list for PBXNativeTarget "DecentlyFluentShare" */;
+			buildPhases = (
+				0EB58D7EABF2026B168F556F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DecentlyFluentShare;
+			packageProductDependencies = (
+			);
+			productName = DecentlyFluentShare;
+			productReference = B06D2A457DB028E11B1CDC03 /* DecentlyFluentShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		B6E1E5994006D102E602A13D /* DecentlyFluent */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A15EDE508310235A45ECAF2B /* Build configuration list for PBXNativeTarget "DecentlyFluent" */;
@@ -142,10 +206,12 @@
 				5523A50617ED09CC7EA49DE5 /* Sources */,
 				9E7F1FFF75FCBA6CA9C0A662 /* Resources */,
 				5F50966EDBA6BD727D55A53B /* Frameworks */,
+				1BACC16A3EBC526CBF54F158 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FDC9992992FD47914631F940 /* PBXTargetDependency */,
 			);
 			name = DecentlyFluent;
 			packageProductDependencies = (
@@ -163,6 +229,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					8052CB2AF71D7B09D4FAE618 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					B6E1E5994006D102E602A13D = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -184,6 +254,7 @@
 			projectRoot = "";
 			targets = (
 				B6E1E5994006D102E602A13D /* DecentlyFluent */,
+				8052CB2AF71D7B09D4FAE618 /* DecentlyFluentShare */,
 			);
 		};
 /* End PBXProject section */
@@ -201,6 +272,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0EB58D7EABF2026B168F556F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A41832F9D249CA8A4161F003 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5523A50617ED09CC7EA49DE5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -222,6 +301,9 @@
 				8F9C6037540A506B1EDA4320 /* Recommender.swift in Sources */,
 				325DAC340017A3A79ACC670D /* Research.swift in Sources */,
 				5245C5886D5E8BDFA8DA8BBB /* SampleStory.swift in Sources */,
+				A98DDE988C8041D68FBAEB32 /* WebBrowserView.swift in Sources */,
+				AE173DDBCBE36DD8EFCE64E4 /* WebScript.swift in Sources */,
+				3C1794E972E9624951A32D82 /* WebTranslator.swift in Sources */,
 				AC88FE466EBBCAE06A5B1341 /* Wikipedia.swift in Sources */,
 				AFD36DED55A499DC066B4474 /* WordFlow.swift in Sources */,
 			);
@@ -229,7 +311,38 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		FDC9992992FD47914631F940 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8052CB2AF71D7B09D4FAE618 /* DecentlyFluentShare */;
+			targetProxy = 5B03EC9BC404440B57530CC5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		01C0EFB1D2D10319A23352A2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.decentespresso.decentlyfluent.share;
+				PRODUCT_MODULE_NAME = DecentlyFluentShare;
+				PRODUCT_NAME = DecentlyFluentShare;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2,6";
+			};
+			name = Debug;
+		};
 		607710B08577A96BD3E5392D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -265,7 +378,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -279,7 +392,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.7;
+				MARKETING_VERSION = 0.1.8;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -325,7 +438,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -345,7 +458,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.7;
+				MARKETING_VERSION = 0.1.8;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -405,6 +518,29 @@
 			};
 			name = Release;
 		};
+		EE62A7EC3DA222B59F91174C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.decentespresso.decentlyfluent.share;
+				PRODUCT_MODULE_NAME = DecentlyFluentShare;
+				PRODUCT_NAME = DecentlyFluentShare;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2,6";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -422,6 +558,15 @@
 			buildConfigurations = (
 				63AE06D327FBB30C743318F5 /* Debug */,
 				607710B08577A96BD3E5392D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EBA6E324BE466681AED4A337 /* Build configuration list for PBXNativeTarget "DecentlyFluentShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01C0EFB1D2D10319A23352A2 /* Debug */,
+				EE62A7EC3DA222B59F91174C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

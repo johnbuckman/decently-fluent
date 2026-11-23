@@ -32,6 +32,8 @@ struct LibraryView: View {
     @State private var path: [Book] = []
     @State private var showReady = false
     @State private var editMode: EditMode = .inactive
+    /// The web browser, and the page it opens with (one shared from another app).
+    @State private var browser: BrowserStart?
     var stored = StoredProfile()
 
     var body: some View {
@@ -48,6 +50,9 @@ struct LibraryView: View {
                     }
                     Button { showImporter = true } label: {
                         Label("Open a book on this device…", systemImage: "folder")
+                    }
+                    Button { browser = BrowserStart(url: nil) } label: {
+                        Label("Read the web at your level…", systemImage: "globe")
                     }
                     if books.isEmpty {
                         Button { addSample() } label: { Label("Add the sample story", systemImage: "text.book.closed") }
@@ -122,12 +127,17 @@ struct LibraryView: View {
                     path = [BookStore.store(imported, language: lang, source: source, native: native, in: context)]
                 }
             }
-            // books shared from another app, opened from Files, or received by AirDrop
-            .onOpenURL { importBook($0) }
+            .fullScreenCover(item: $browser) { WebBrowserView(start: $0.url) }
+            // books shared from another app, opened from Files, or received by AirDrop; web pages shared to the app
+            .onOpenURL { url in
+                if let page = BrowserStart.page(from: url) { browser = BrowserStart(url: page) } else { importBook(url) }
+            }
             #if DEBUG
             // simulator testing of that path: SIMCTL_CHILD_DF_OPEN_FILE=/path/to/book.epub
             .task {
                 if let path = ProcessInfo.processInfo.environment["DF_OPEN_FILE"] { importBook(URL(fileURLWithPath: path)) }
+                // SIMCTL_CHILD_DF_OPEN_WEB=https://… opens the browser there
+                if let page = ProcessInfo.processInfo.environment["DF_OPEN_WEB"].flatMap(URL.init(string:)) { browser = BrowserStart(url: page) }
             }
             #endif
             .alert("Couldn't import", isPresented: .constant(error != nil), presenting: error) { _ in
@@ -418,5 +428,22 @@ struct RecommendedBooksView: View {
         func rank(_ l: Level) -> Int { abs(Level.allCases.firstIndex(of: l)! - Level.allCases.firstIndex(of: profile.level)!) }
         if !levels.contains(p.level), let nearest = levels.min(by: { rank($0) < rank($1) }) { p.level = nearest }
         return p
+    }
+}
+
+/// Opening the web browser, at a page or empty.
+struct BrowserStart: Identifiable {
+    let id = UUID()
+    var url: URL?
+
+    /// The web page in a link the share extension opened (decentlyfluent://open?url=…), or a web address itself.
+    static func page(from url: URL) -> URL? {
+        switch url.scheme?.lowercased() {
+        case "http", "https": return url
+        case "decentlyfluent":
+            return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                .first(where: { $0.name == "url" })?.value.flatMap(URL.init(string:))
+        default: return nil
+        }
     }
 }

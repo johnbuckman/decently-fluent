@@ -16,6 +16,7 @@ A graded-reader generator for iPhone, iPad and Mac, for learners of English, Fre
 - **Wikipedia:** each book's page shows its plot summary from Wikipedia (in your language where there is an article, else English) with a link to the article.
 - **Find a book for me:** a short guide (your language and the one you're learning, retold or original, level, favourite kinds of story, minutes a day), then books from the bundled Project Gutenberg catalog ranked by research on learning from reading — mostly Paul Nation's — with every reason and its source shown (`Sources/Research.swift`).
 - **Open books from anywhere:** Files, another app's share sheet, or AirDrop (EPUB, PDF, text). The app detects the book's language and asks whether to read the original or retell it.
+- **Read the web at your level:** a web browser (the globe button in the library) that rewrites each page in place, in the language you're learning, at your level, keeping its links, pictures and layout. Only the parts of the page on screen or just below are rewritten, as you scroll, and rewritten pages are kept, so going back costs nothing. Typing words instead of an address searches Google in the language you're learning. Portrait shows only the rewritten page; landscape puts the page as written on the right, scrolling along paragraph by paragraph. Tap a word for its meaning, double-tap a word you don't know to add it to *My words*, and use the eye button to show new words. A page already in the language you're learning is simplified (or shown as written at Native). Share a web page from Safari or any other app to Decently Fluent to open it there.
 - **Recycling:** each book keeps a list of the words each level has introduced and asks the writer to reuse them until each has been seen 5 times, as graded readers do.
 
 ## Install
@@ -40,7 +41,7 @@ For simulator testing without typing a key, pass it in the launch environment:
 SIMCTL_CHILD_DF_PROVIDER=deepseek SIMCTL_CHILD_DF_DEEPSEEK_KEY=sk-… xcrun simctl launch booted com.decentespresso.decentlyfluent
 ```
 
-(`DF_ANTHROPIC_KEY` for Claude.)
+(`DF_ANTHROPIC_KEY` for Claude.) `SIMCTL_CHILD_DF_OPEN_WEB=https://…` opens the web browser at a page. Debug builds also take `DF_DOUBLE_TAP_MS` (for example 4000), as taps sent one at a time to the simulator are slower than a finger's double-tap.
 
 ### Dev bridge: a Claude Code session answers instead of an API
 
@@ -83,6 +84,10 @@ Book texts are fetched from Gutenberg mirrors, measured and discarded. Book file
 | `Sources/ImportChoiceView.swift` | Opening a book from Files, sharing or AirDrop; language detection |
 | `Sources/LearnerFit.swift` | Judges an unmeasured book after download |
 | `Sources/ReaderView.swift`, `WordFlow.swift` | The reader: tappable word layout, labels, gloss card, landscape view |
+| `Sources/WebBrowserView.swift` | The web browser: toolbar, address bar and Google search, the two pages side by side, word taps |
+| `Sources/WebScript.swift` | The script put into web pages: finds readable blocks, writes them in place, word taps, scrolling together |
+| `Sources/WebTranslator.swift` | Rewrites web page blocks at a level, a few at a time; pages kept on disk |
+| `ShareExtension/` | "Decently Fluent" in other apps' share sheets: opens a shared web page in the browser (`decentlyfluent://open?url=…`) |
 
 ## Licence
 

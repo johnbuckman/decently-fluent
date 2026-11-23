@@ -66,7 +66,7 @@ enum LLMError: LocalizedError {
     case noKey(Provider), http(Int, String), refused, badAnswer(String)
     var errorDescription: String? {
         switch self {
-        case .noKey(let p): "Add your \(p.name) API key in Settings to translate books."
+        case .noKey(let p): "Add your \(p.name) API key in Settings to translate."
         case .http(let code, let body):
             switch code {
             case 401, 403: "The API key was refused (\(code)). Check it in Settings."

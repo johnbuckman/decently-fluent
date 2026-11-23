@@ -64,11 +64,26 @@
 			</array>
 		</dict>
 	</array>
+	<!-- decentlyfluent://open?url=… opens a web page in the browser (the share extension sends these) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.decentespresso.decentlyfluent</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>decentlyfluent</string>
+			</array>
+		</dict>
+	</array>
 	<!-- shared and AirDropped files are copied into the app, not edited where they are -->
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<!-- the web browser opens any site, http ones too -->
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
