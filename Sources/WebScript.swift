@@ -16,12 +16,16 @@ enum WebScript {
   const MEDIA = 'img,picture,svg,video,audio,iframe,canvas,input,button,select,textarea';
   const LETTERS = /\p{L}/gu;
   const blocks = [];          // id -> element
+  const keys = [];            // id -> key from its original text
+  const byKey = new Map();    // key -> id
+  const seenText = new Map(); // text start -> how many blocks begin with it
   const original = new Map(); // id -> original innerHTML (to put a page back for a new level)
   const links = new Map();    // id -> [link elements, by marker number]
   const done = new Set();     // ids written in the language being learned
   const asked = new Set();    // ids the app has been asked for
   const seen = new Set();
   let glossaries = new Map(); // id -> glossary
+  const labelled = new Set(); // lemmas whose meaning is already shown on this page
   let showNew = false;
 
   const letters = (s) => (s.match(LETTERS) || []).length;
@@ -50,7 +54,17 @@ enum WebScript {
     const all = root.querySelectorAll(BLOCK + ',div,span');
     for (const el of all) {
       if (el.closest('[data-df-id]')) continue;
-      if (candidate(el)) { el.dataset.dfId = blocks.length; blocks.push(el); found.push(el); }
+      if (candidate(el)) {
+        const id = blocks.length;
+        el.dataset.dfId = id; blocks.push(el); found.push(el);
+        // a key from the block's text as the page wrote it, so the two pages (landscape) find the same block
+        // even when scripts add things in a different order; repeated text is told apart by its count
+        const k = el.textContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+        const n = (seenText.get(k) || 0) + 1;
+        seenText.set(k, n);
+        keys[id] = k + '#' + n;
+        byKey.set(keys[id], id);
+      }
     }
     if (mode === 'translate') for (const el of found) observer.observe(el);
   }
@@ -167,10 +181,11 @@ enum WebScript {
           const t = tokens[i + j];
           if (t.dataset.g !== undefined) continue;
           t.dataset.g = gi;
-          if (g.isNew) {
-            t.classList.add('df-new');
-            if (j === 0) t.dataset.m = g.m || '';
-          }
+          // every glossary word is probably above the reader's level: highlighted, with its meaning beside the
+          // first one on the page (on the web, unlike in a book, words met on other pages are still worth showing)
+          t.classList.add('df-new');
+          const key = (g.lemma || g.w || '').toLowerCase();
+          if (j === words.length - 1 && !labelled.has(key)) { t.dataset.m = g.m || ''; labelled.add(key); }
         }
       }
     });
@@ -183,7 +198,7 @@ enum WebScript {
   function reset() {
     for (const id of done) { const el = blocks[id]; if (el && original.has(id)) el.innerHTML = original.get(id); }
     for (const id of asked) { const el = blocks[id]; if (el) { el.classList.remove('df-pending', 'df-failed'); if (original.has(id)) el.innerHTML = original.get(id); } }
-    done.clear(); asked.clear(); seen.clear(); glossaries = new Map();
+    done.clear(); asked.clear(); seen.clear(); labelled.clear(); glossaries = new Map();
     for (const el of blocks) { observer.unobserve(el); observer.observe(el); }
   }
 
@@ -229,16 +244,17 @@ enum WebScript {
 
   // ---- scrolling together (landscape) ----
   function reportTop() {
-    // the first block whose bottom is below the top of the window
-    let lo = 0, hi = blocks.length - 1, best = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      const r = blocks[mid].getBoundingClientRect();
-      if (r.bottom > 0) { best = mid; hi = mid - 1; } else lo = mid + 1;
+    // the first shown block whose bottom is below the top of the window (hidden blocks, such as collapsed
+    // sections, have no size and are skipped)
+    let best = -1;
+    for (let i = 0; i < blocks.length; i++) {
+      const r = blocks[i].getBoundingClientRect();
+      if (r.height === 0) continue;
+      if (r.bottom > 0) { best = i; break; }
     }
     if (best < 0) return;
     const r = blocks[best].getBoundingClientRect();
-    post({ type: 'scroll', id: best, frac: r.height > 0 ? Math.max(0, -r.top / r.height) : 0, y: scrollY });
+    post({ type: 'scroll', key: keys[best], frac: r.height > 0 ? Math.max(0, -r.top / r.height) : 0 });
   }
   let scrollQueued = false;
   addEventListener('scroll', () => {
@@ -251,8 +267,8 @@ enum WebScript {
   addEventListener('wheel', lead, { passive: true, capture: true });
   addEventListener('keydown', lead, { capture: true });
 
-  function scrollToBlock(id, frac) {
-    const el = blocks[id];
+  function scrollToBlock(key, frac) {
+    const el = blocks[byKey.get(key)];
     if (!el) return;
     const r = el.getBoundingClientRect();
     window.scrollTo(0, scrollY + r.top + frac * r.height);

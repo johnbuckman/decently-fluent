@@ -195,10 +195,12 @@ final class WebModel: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRec
         case "lead":
             leader = view
         case "scroll":
-            guard sideBySide, (leader ?? translated) === view, let id = m["id"] as? Int else { return }
+            guard sideBySide, (leader ?? translated) === view, let key = m["key"] as? String,
+                  let quoted = try? JSONSerialization.data(withJSONObject: key, options: .fragmentsAllowed),
+                  let js = String(data: quoted, encoding: .utf8) else { return }
             let frac = m["frac"] as? Double ?? 0
             let other = isOriginal ? translated : original
-            run("window.__df && __df.scrollTo(\(id), \(frac))", in: other)
+            run("window.__df && __df.scrollTo(\(js), \(frac))", in: other)
         default: break
         }
     }
