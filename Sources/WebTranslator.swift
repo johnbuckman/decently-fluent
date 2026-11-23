@@ -58,6 +58,8 @@ final class WebTranslator {
         page = url
         queue = []
         waiting = [:]
+        totalBlocks = 0
+        doneBlocks = 0
         pageLanguage = nil
         lastError = nil
         loadCache()
@@ -86,12 +88,43 @@ final class WebTranslator {
             if waiting[h] != nil { if !waiting[h]!.contains(b.id) { waiting[h]!.append(b.id) }; continue }
             waiting[h] = [b.id]
             queue.append(b)
+            totalBlocks += 1
         }
         busy = queue.count + inFlight
         run()
     }
 
     private var inFlight = 0
+
+    // MARK: - Progress, for the bar and time estimate
+
+    /// Blocks asked for since the translator was last idle, and how many of them are done.
+    private(set) var totalBlocks = 0
+    private(set) var doneBlocks = 0
+    /// The requests being answered now: their blocks, words and when each was sent.
+    private var requests: [UUID: (blocks: Int, words: Int, started: Date)] = [:]
+
+    /// Seconds one request of this many words is expected to take (the reader's own estimate).
+    private static func expected(_ words: Int) -> Double { max(8, Double(words) * Generator.secondsPerWord + 4) }
+
+    /// How far the blocks asked for have got (0…1, never quite 1 until the last answer), and about how many seconds
+    /// are left; nil when nothing is being written.
+    func progress(at now: Date) -> (fraction: Double, secondsLeft: Int, done: Int, total: Int, overdue: Bool)? {
+        guard totalBlocks > 0, busy > 0 else { return nil }
+        var share = 0.0, inFlightLeft = 0.0, overdue = false
+        for r in requests.values {
+            let elapsed = now.timeIntervalSince(r.started), exp = Self.expected(r.words)
+            // a request in flight moves the bar by the time it has taken, stopping short of done
+            share += Double(r.blocks) * min(0.95, elapsed / exp)
+            inFlightLeft = max(inFlightLeft, exp - elapsed)
+            if elapsed > exp { overdue = true }
+        }
+        let queuedWords = queue.reduce(0) { $0 + $1.text.split(separator: " ").count }
+        let queuedRequests = (queue.count + Self.batchBlocks - 1) / Self.batchBlocks
+        let queuedSeconds = (Double(queuedWords) * Generator.secondsPerWord + 4 * Double(queuedRequests)) / Double(Self.maxWorkers)
+        let fraction = min(1, (Double(doneBlocks) + share) / Double(totalBlocks))
+        return (fraction, Int((max(0, inFlightLeft) + queuedSeconds).rounded()), doneBlocks, totalBlocks, overdue)
+    }
 
     private func run() {
         while workers < Self.maxWorkers, !queue.isEmpty {
@@ -104,11 +137,22 @@ final class WebTranslator {
             workers += 1
             inFlight += batch.count
             let key = cacheKey
+            let id = UUID(), sent = words
+            requests[id] = (batch.count, sent, Date())
             Task {
-                await generate(batch, key: key)
+                let started = Date()
+                let ok = await generate(batch, key: key)
+                if ok, sent > 0 {
+                    // learn how fast the service is, so the next estimate is closer (shared with the reader)
+                    let perWord = max(0, Date().timeIntervalSince(started) - 4) / Double(sent)
+                    Generator.secondsPerWord = Generator.secondsPerWord * 0.6 + perWord * 0.4
+                }
+                requests[id] = nil
                 workers -= 1
                 inFlight -= batch.count
+                if key == cacheKey { doneBlocks += batch.count }
                 busy = queue.count + inFlight
+                if busy == 0 { totalBlocks = 0; doneBlocks = 0 }
                 run()
             }
         }
@@ -120,7 +164,9 @@ final class WebTranslator {
         var blocks: [Block]
     }
 
-    private func generate(_ batch: [WebBlock], key: String) async {
+    /// Writes one batch; false if the request failed.
+    @discardableResult
+    private func generate(_ batch: [WebBlock], key: String) async -> Bool {
         let system = systemPrompt()
         var user = "Web page: \(page?.absoluteString ?? "")\n\nBlocks:\n"
         for b in batch { user += "\n[i=\(b.id)] \(b.text)\n" }
@@ -158,10 +204,12 @@ final class WebTranslator {
             }
             Self.setIntroduced(introduced, language, level)
             if current { saveCache(); lastError = nil }
+            return true
         } catch {
-            guard key == cacheKey else { return }
+            guard key == cacheKey else { return false }
             lastError = error.localizedDescription
             for b in batch { for id in waiting.removeValue(forKey: Self.hash(b.text)) ?? [b.id] { onReady(id, nil) } }
+            return false
         }
     }
 

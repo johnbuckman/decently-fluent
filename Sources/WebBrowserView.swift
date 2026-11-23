@@ -20,6 +20,15 @@ enum AddressBar {
     }
 }
 
+extension URL {
+    /// A page on one of Google's sites (google.com, google.fr, google.co.uk, maps.google.com…): shown as it is,
+    /// never rewritten.
+    var isGoogle: Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host.range(of: #"(^|\.)google\.(com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$"#, options: .regularExpression) != nil
+    }
+}
+
 /// Passes the page script's messages on without the web view keeping its owner alive.
 private final class MessageProxy: NSObject, WKScriptMessageHandler {
     weak var target: WebModel?
@@ -126,7 +135,7 @@ final class WebModel: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRec
 
     /// The original page shows what the translated one shows.
     private func followOriginal() {
-        guard let u = translated.url, original.url != u else { return }
+        guard let u = translated.url, !u.isGoogle, original.url != u else { return }
         original.load(URLRequest(url: u))
     }
 
@@ -175,7 +184,7 @@ final class WebModel: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRec
         guard let m = body as? [String: Any], let type = m["type"] as? String else { return }
         let view = isOriginal ? original : translated
         switch type {
-        case "need" where !isOriginal:
+        case "need" where !isOriginal && translated.url?.isGoogle != true:
             let blocks = (m["blocks"] as? [[String: Any]] ?? []).compactMap { b -> WebBlock? in
                 guard let id = b["id"] as? Int, let t = b["text"] as? String else { return nil }
                 return WebBlock(id: id, text: t)
@@ -349,7 +358,8 @@ struct WebBrowserView: View {
                 ZStack(alignment: .top) {
                     HStack(spacing: 0) {
                         WebViewHost(view: model.translated)
-                        if landscape {
+                        // Google's pages aren't rewritten, so there's nothing to show beside them
+                        if landscape && model.translated.url?.isGoogle != true {
                             Divider()
                             WebViewHost(view: model.original)
                         }
@@ -481,6 +491,11 @@ struct WebBrowserView: View {
 
     // MARK: - Overlays
 
+    /// "12 s", "about 2 min".
+    static func duration(_ seconds: Int) -> String {
+        seconds < 90 ? "\(max(1, seconds)) s" : "\(Int((Double(seconds) / 60).rounded())) min"
+    }
+
     @ViewBuilder private var overlays: some View {
         VStack(spacing: 8) {
             if let error = model.translator.lastError {
@@ -491,12 +506,26 @@ struct WebBrowserView: View {
                 .padding(10)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
             } else if model.translator.busy > 0 {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Writing in \(model.translator.language.name) at \(model.translator.level.rawValue)…").font(.footnote)
+                // a bar and a time estimate, like the book reader's
+                TimelineView(.periodic(from: .now, by: 0.5)) { tl in
+                    if let p = model.translator.progress(at: tl.date) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ProgressView(value: p.fraction)
+                            HStack {
+                                Text("Writing in \(model.translator.language.name) at \(model.translator.level.rawValue)…")
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(p.overdue ? "\(p.done) of \(p.total) · taking longer than usual"
+                                     : "\(p.done) of \(p.total) · about \(Self.duration(p.secondsLeft)) left")
+                                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(maxWidth: 420)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(.regularMaterial, in: Capsule())
             }
             if let card = model.card {
                 GlossCardView(card: card, onKnown: { model.markKnown(card) }, onClose: { model.card = nil })

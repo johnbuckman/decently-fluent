@@ -9,7 +9,10 @@ enum WebScript {
     static let source = #"""
 (function () {
   if (window.__df) return;
-  const mode = window.__dfMode || 'translate';
+  // Google's own pages (search results, maps…) are left as they are: in the language being learned they
+  // are already searched in that language (hl=), and rewriting them adds nothing
+  const onGoogle = /(^|\.)google\.(com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$/i.test(location.hostname);
+  const mode = onGoogle ? 'original' : (window.__dfMode || 'translate');
   const post = (m) => { try { window.webkit.messageHandlers.df.postMessage(m); } catch (e) {} };
   const BLOCK = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,dd,dt,td,th,figcaption,caption,summary,label';
   const SKIP = 'nav,script,style,noscript,code,pre,textarea,select,option,button,svg,math,[contenteditable=""],[contenteditable="true"],[aria-hidden="true"],.df-skip';
