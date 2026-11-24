@@ -24,7 +24,7 @@ A graded-reader generator for iPhone, iPad and Mac, for learners of English, Fre
 - **iPhone and iPad:** in [SideStep](https://github.com/johnbuckman/SideStep), search for Decently Fluent, or sideload `decently-fluent.ipa` from the [latest release](https://github.com/johnbuckman/decently-fluent/releases/latest) with AltStore, SideStore or Sideloadly.
 - **Mac:** download `decently-fluent-mac.dmg` from the [latest release](https://github.com/johnbuckman/decently-fluent/releases/latest) (signed and notarized).
 
-Rewriting books needs an AI service: add a Claude or DeepSeek API key in Settings. It is stored in the Keychain on your device and sent only to that service.
+Rewriting books needs an AI service: add a Claude, DeepSeek or ChatGPT (OpenAI) API key in Settings. It is stored in the Keychain on your device and sent only to that service.
 
 ## Build
 
@@ -33,7 +33,7 @@ xcodegen generate
 xcodebuild -project DecentlyFluent.xcodeproj -scheme DecentlyFluent -destination 'platform=iOS Simulator,name=iPhone 17e' -derivedDataPath build-sim build
 ```
 
-Translation needs an API key, entered in Settings (stored in the Keychain): Claude (default `claude-opus-5-5`) or DeepSeek (`deepseek-flash`).
+Translation needs an API key, entered in Settings (stored in the Keychain): Claude (default `claude-opus-5-5`), DeepSeek (`deepseek-flash`, thinking off) or ChatGPT (`gpt-6-luna`, reasoning off).
 
 For simulator testing without typing a key, pass it in the launch environment:
 
@@ -41,7 +41,7 @@ For simulator testing without typing a key, pass it in the launch environment:
 SIMCTL_CHILD_DF_PROVIDER=deepseek SIMCTL_CHILD_DF_DEEPSEEK_KEY=sk-… xcrun simctl launch booted com.decentespresso.decentlyfluent
 ```
 
-(`DF_ANTHROPIC_KEY` for Claude.) `SIMCTL_CHILD_DF_OPEN_WEB=https://…` opens the web browser at a page. Debug builds also take `DF_DOUBLE_TAP_MS` (for example 4000), as taps sent one at a time to the simulator are slower than a finger's double-tap.
+(`DF_ANTHROPIC_KEY` for Claude, `DF_OPENAI_KEY` for ChatGPT with `DF_PROVIDER=openai`.) `SIMCTL_CHILD_DF_OPEN_WEB=https://…` opens the web browser at a page. Debug builds also take `DF_DOUBLE_TAP_MS` (for example 4000), as taps sent one at a time to the simulator are slower than a finger's double-tap.
 
 ### Dev bridge: a Claude Code session answers instead of an API
 
@@ -73,7 +73,7 @@ Book texts are fetched from Gutenberg mirrors, measured and discarded. Book file
 | --- | --- |
 | `Sources/Models.swift` | SwiftData models (Book, Chapter, Paragraph, LearnerWord), CEFR level rules |
 | `Sources/Importer.swift` | EPUB (zip or Apple Books folder), PDF and text import; a small zip reader |
-| `Sources/LLM.swift` | Claude and DeepSeek clients, retries, Keychain |
+| `Sources/LLM.swift` | Claude, DeepSeek and OpenAI (ChatGPT) clients, retries, Keychain |
 | `Sources/Generator.swift` | The translation queue, the graded-reader prompt, recycling of introduced words |
 | `Sources/Learning.swift` | Lemmas (NaturalLanguage), double-tap tracking and when a word counts as learned |
 | `Sources/Catalog.swift` | Reads the bundled SQLite catalog: measured books, shelves, full-text search |

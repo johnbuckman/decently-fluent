@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum Provider: String, CaseIterable, Identifiable {
-    case claude, deepseek
+    case claude, deepseek, openai
     /// Development only: a Claude Code session answers through tools/claude_bridge.py on the Mac.
     case bridge
     var id: String { rawValue }
@@ -12,7 +12,7 @@ enum Provider: String, CaseIterable, Identifiable {
         #if DEBUG
         allCases
         #else
-        [.claude, .deepseek]
+        [.claude, .deepseek, .openai]
         #endif
     }
 
@@ -20,6 +20,7 @@ enum Provider: String, CaseIterable, Identifiable {
         switch self {
         case .claude: "Claude (Anthropic)"
         case .deepseek: "DeepSeek"
+        case .openai: "ChatGPT (OpenAI)"
         case .bridge: "Claude Code (dev bridge)"
         }
     }
@@ -27,13 +28,21 @@ enum Provider: String, CaseIterable, Identifiable {
         switch self {
         case .claude: "claude-opus-5-5"
         case .deepseek: "deepseek-flash"
+        // OpenAI's choice for the lowest cost and latency; it can run with reasoning off
+        case .openai: "gpt-6-luna"
         case .bridge: "http://localhost:8793/llm"
         }
     }
     var needsKey: Bool { self != .bridge }
     var keyHint: String { self == .claude ? "sk-ant-…" : "sk-…" }
     /// For simulator testing: `SIMCTL_CHILD_DF_ANTHROPIC_KEY=… xcrun simctl launch …`
-    var environmentKey: String { self == .claude ? "DF_ANTHROPIC_KEY" : "DF_DEEPSEEK_KEY" }
+    var environmentKey: String {
+        switch self {
+        case .claude: "DF_ANTHROPIC_KEY"
+        case .openai: "DF_OPENAI_KEY"
+        default: "DF_DEEPSEEK_KEY"
+        }
+    }
 }
 
 enum LLMSettings {
@@ -99,9 +108,12 @@ enum LLM {
         var attempt = 0
         while true {
             do {
-                let text = p == .claude
-                    ? try await claude(system: system, user: user, key: key, model: LLMSettings.model(p))
-                    : try await deepseek(system: system, user: user, key: key, model: LLMSettings.model(p))
+                let text: String
+                switch p {
+                case .claude: text = try await claude(system: system, user: user, key: key, model: LLMSettings.model(p))
+                case .openai: text = try await openai(system: system, user: user, key: key, model: LLMSettings.model(p))
+                default: text = try await deepseek(system: system, user: user, key: key, model: LLMSettings.model(p))
+                }
                 return try extractJSON(text)
             } catch LLMError.http(let code, let body) where [408, 429, 500, 502, 503, 504, 529].contains(code) {
                 guard attempt < waits.count else { throw LLMError.http(code, body) }
@@ -164,11 +176,13 @@ enum LLM {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        // at its default effort deepseek-flash can spend the whole budget reasoning and answer nothing
+        // thinking off: rewriting text doesn't need it, and without it the answer starts at once (thinking was the
+        // main reason pages were slow; at its default effort deepseek-flash could also spend the whole budget
+        // reasoning and answer nothing). DeepSeek's documented switch: thinking {type: disabled}.
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 65536,
-            "reasoning_effort": "low",
+            "thinking": ["type": "disabled"],
             "response_format": ["type": "json_object"],
             "messages": [["role": "system", "content": system], ["role": "user", "content": user + "\n\nAnswer in JSON."]],
         ]
@@ -180,6 +194,40 @@ enum LLM {
               let choice = (obj["choices"] as? [[String: Any]])?.first,
               let message = choice["message"] as? [String: Any],
               let text = message["content"] as? String else { throw LLMError.badAnswer("no content") }
+        if choice["finish_reason"] as? String == "length" { throw LLMError.badAnswer("answer too long") }
+        return text
+    }
+
+    /// ChatGPT models through OpenAI's Chat Completions, reasoning off (the default model, gpt-6-luna, accepts "none";
+    /// a model that doesn't is retried once without it).
+    static func openai(system: String, user: String, key: String, model: String) async throws -> String {
+        func send(reasoningOff: Bool) async throws -> (Int, Data) {
+            var req = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            var body: [String: Any] = [
+                "model": model,
+                "max_completion_tokens": 32768,
+                "response_format": ["type": "json_object"],
+                "messages": [["role": "system", "content": system], ["role": "user", "content": user + "\n\nAnswer in JSON."]],
+            ]
+            if reasoningOff { body["reasoning_effort"] = "none" }
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, resp) = try await session.data(for: req)
+            return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
+        }
+        var (code, data) = try await send(reasoningOff: true)
+        // some OpenAI models refuse reasoning_effort "none" (or any reasoning setting): ask again without it
+        if code == 400, String(decoding: data, as: UTF8.self).contains("reasoning") {
+            (code, data) = try await send(reasoningOff: false)
+        }
+        guard code == 200 else { throw LLMError.http(code, String(decoding: data, as: UTF8.self)) }
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choice = (obj["choices"] as? [[String: Any]])?.first,
+              let message = choice["message"] as? [String: Any] else { throw LLMError.badAnswer("no content") }
+        if message["refusal"] as? String != nil { throw LLMError.refused }
+        guard let text = message["content"] as? String else { throw LLMError.badAnswer("no content") }
         if choice["finish_reason"] as? String == "length" { throw LLMError.badAnswer("answer too long") }
         return text
     }
