@@ -15,11 +15,12 @@ import FoundationModels
 /// Needs iOS 26, a device with Apple Intelligence switched on, and the translation languages downloaded.
 enum OnDevice {
     enum Problem: LocalizedError {
-        case noModel(String), noLanguages(String, String)
+        /// The translation languages to download, as codes (the reader and browser offer a Download button for them).
+        case noModel(String), noLanguages(source: String, target: String)
         var errorDescription: String? {
             switch self {
             case .noModel(let why): "Apple's on-device AI isn't available here (\(why)). Choose another service in Settings."
-            case .noLanguages(let a, let b): "Download \(a) and \(b) for translation on this device: tap Download in the library or in Settings."
+            case .noLanguages(let a, let b): "\(OnDevice.name(a)) and \(OnDevice.name(b)) need downloading for translation on this device."
             }
         }
     }
@@ -55,11 +56,11 @@ enum OnDevice {
     static func check(from source: String, to target: String, level: Level) async throws {
         if level != .native, let why = modelProblem { throw Problem.noModel(why) }
         for (a, b) in pairs(from: source, to: target, level: level) where !(await AppleTranslation.isReady(from: a, to: b)) {
-            throw Problem.noLanguages(name(a), name(b))
+            throw Problem.noLanguages(source: a, target: b)
         }
     }
 
-    private static func name(_ code: String) -> String {
+    static func name(_ code: String) -> String {
         Language(rawValue: code)?.name ?? Locale(identifier: "en").localizedString(forLanguageCode: code) ?? code
     }
 
@@ -68,13 +69,13 @@ enum OnDevice {
         try await check(from: source, to: target, level: level)
         if level == .native {
             if source == target { return texts }
-            guard let t = await AppleTranslation.translate(texts, from: source, to: target) else { throw Problem.noLanguages(name(source), name(target)) }
+            guard let t = await AppleTranslation.translate(texts, from: source, to: target) else { throw Problem.noLanguages(source: source, target: target) }
             return t
         }
         // 1. into English
         var english = texts
         if source != "en" {
-            guard let t = await AppleTranslation.translate(texts, from: source, to: "en") else { throw Problem.noLanguages(name(source), "English") }
+            guard let t = await AppleTranslation.translate(texts, from: source, to: "en") else { throw Problem.noLanguages(source: source, target: "en") }
             english = t
         }
         // 2. simplified, paragraph by paragraph (the model only takes about 4,000 tokens at a time)
@@ -82,7 +83,7 @@ enum OnDevice {
         for e in english { simple.append(await simplify(e, level: level) ?? e) }
         // 3. into the language being learned
         if target == "en" { return simple }
-        guard let t = await AppleTranslation.translate(simple, from: "en", to: target) else { throw Problem.noLanguages("English", name(target)) }
+        guard let t = await AppleTranslation.translate(simple, from: "en", to: target) else { throw Problem.noLanguages(source: "en", target: target) }
         return t
     }
 

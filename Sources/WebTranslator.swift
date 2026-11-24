@@ -25,6 +25,8 @@ final class WebTranslator {
     /// Blocks being written now, and waiting.
     private(set) var busy = 0
     private(set) var lastError: String?
+    /// With the free service: translation languages that need downloading (the browser offers a Download button).
+    private(set) var missingLanguages: (source: String, target: String)?
 
     var language: Language
     var native: Language
@@ -65,7 +67,7 @@ final class WebTranslator {
         loadCache()
     }
 
-    func clearError() { lastError = nil }
+    func clearError() { lastError = nil; missingLanguages = nil }
 
     /// Whether this page needs rewriting at all: an original read at Native level is shown as written.
     var showsAsWritten: Bool {
@@ -256,10 +258,12 @@ final class WebTranslator {
             }
             saveCache()
             lastError = nil
+            missingLanguages = nil
             return true
         } catch {
             guard key == cacheKey else { return false }
             lastError = error.localizedDescription
+            if case OnDevice.Problem.noLanguages(let a, let b) = error { missingLanguages = (a, b) }
             for b in batch { for id in waiting.removeValue(forKey: Self.hash(b.text)) ?? [b.id] { onReady(id, nil) } }
             return false
         }

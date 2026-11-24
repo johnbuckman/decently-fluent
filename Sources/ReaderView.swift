@@ -36,6 +36,8 @@ struct ReaderView: View {
     @State private var textOnly = false
     /// Counts turns made with taps, buttons and keys, so the page curl animates them.
     @State private var turns = 0
+    /// Translation languages the free service needs, being downloaded from the error's Download button.
+    @State private var downloadPair: (source: String, target: String)?
 
     private var chapters: [Chapter] { book.sortedChapters }
     private var chapter: Chapter? { chapters.indices.contains(book.currentChapter) ? chapters[book.currentChapter] : chapters.first }
@@ -106,6 +108,11 @@ struct ReaderView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        // once the languages are downloaded, write the paragraphs that failed again
+        .modifier(AppleTranslationDownload(pair: $downloadPair) {
+            generator.clearFailures()
+            generate(from: book.readingParagraph)
+        })
         .toolbar(textOnly ? .hidden : .visible, for: .navigationBar)
         .statusBarHidden(textOnly)
         .persistentSystemOverlays(textOnly ? .hidden : .automatic)
@@ -199,6 +206,14 @@ struct ReaderView: View {
             }
             if let err = generator.lastError {
                 Label(err, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
+                if let pair = generator.missingLanguages {
+                    Button {
+                        downloadPair = pair
+                    } label: {
+                        Label("Download \(OnDevice.name(pair.source)) and \(OnDevice.name(pair.target))", systemImage: "arrow.down.circle")
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
             }
         }
         .padding(.bottom, 6)

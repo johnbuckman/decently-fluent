@@ -338,6 +338,8 @@ struct WebBrowserView: View {
     @State private var model: WebModel
     @State private var typed = ""
     @FocusState private var editing: Bool
+    /// Translation languages the free service needs, being downloaded from the error's Download button.
+    @State private var downloadPair: (source: String, target: String)?
     let start: URL?
 
     init(start: URL?) {
@@ -379,6 +381,8 @@ struct WebBrowserView: View {
             if let start { model.load(start) } else if model.translated.url == nil { editing = true }
         }
         .onChange(of: model.address) { _, a in if !editing { typed = a } }
+        // once the languages are downloaded, write the parts of the page that failed again
+        .modifier(AppleTranslationDownload(pair: $downloadPair) { model.retryFailed() })
     }
 
     // MARK: - Bars
@@ -501,7 +505,11 @@ struct WebBrowserView: View {
             if let error = model.translator.lastError {
                 HStack(spacing: 10) {
                     Text(error).font(.footnote)
-                    Button("Try again") { model.retryFailed() }.font(.footnote.weight(.semibold))
+                    if let pair = model.translator.missingLanguages {
+                        Button("Download") { downloadPair = pair }.font(.footnote.weight(.semibold))
+                    } else {
+                        Button("Try again") { model.retryFailed() }.font(.footnote.weight(.semibold))
+                    }
                 }
                 .padding(10)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))

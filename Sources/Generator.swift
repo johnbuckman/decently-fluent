@@ -25,6 +25,8 @@ final class Generator {
     /// Seconds the current request is expected to take.
     var expectedSeconds: Double { max(8, Double(current?.words ?? 0) * Self.secondsPerWord + 4) }
     var lastError: String?
+    /// With the free service: translation languages that need downloading (the reader offers a Download button).
+    private(set) var missingLanguages: (source: String, target: String)?
     /// Whether this generator writes the side column too. The pre-generator runs one generator per level at once,
     /// and only one of them needs to.
     var writesSide = true
@@ -278,6 +280,7 @@ final class Generator {
             }
             try? context.save()
             lastError = nil
+            missingLanguages = nil
         } catch {
             for p in batch {
                 let k = Self.key(p, level)
@@ -285,7 +288,15 @@ final class Generator {
                 failed[k] = error.localizedDescription
             }
             lastError = error.localizedDescription
+            if case OnDevice.Problem.noLanguages(let a, let b) = error { missingLanguages = (a, b) }
         }
+    }
+
+    /// Forget the paragraphs that failed (after the languages were downloaded, say), so they are written again.
+    func clearFailures() {
+        failed = [:]
+        lastError = nil
+        missingLanguages = nil
     }
 
     static let recycleUses = 5
