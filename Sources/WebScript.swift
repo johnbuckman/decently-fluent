@@ -257,7 +257,14 @@ enum WebScript {
     }
     if (best < 0) return;
     const r = blocks[best].getBoundingClientRect();
-    post({ type: 'scroll', key: keys[best], frac: r.height > 0 ? Math.max(0, -r.top / r.height) : 0 });
+    // at the very top or bottom of the page the other page goes there too, so a picture above the first paragraph
+    // (a news story's hero image) shows on both sides
+    const doc = document.scrollingElement || document.documentElement;
+    const edge = scrollY <= 2 ? 'top' : (scrollY + innerHeight >= doc.scrollHeight - 2 ? 'bottom' : '');
+    post({ type: 'scroll', key: keys[best], edge,
+           // how far into the block the top of the window is, or how far below the top of the window the block starts
+           frac: r.height > 0 ? Math.max(0, -r.top / r.height) : 0,
+           below: Math.max(0, r.top) });
   }
   let scrollQueued = false;
   addEventListener('scroll', () => {
@@ -270,11 +277,15 @@ enum WebScript {
   addEventListener('wheel', lead, { passive: true, capture: true });
   addEventListener('keydown', lead, { capture: true });
 
-  function scrollToBlock(key, frac) {
+  function scrollToBlock(key, frac, below, edge) {
+    const doc = document.scrollingElement || document.documentElement;
+    if (edge === 'top') { window.scrollTo(0, 0); return; }
+    if (edge === 'bottom') { window.scrollTo(0, doc.scrollHeight); return; }
     const el = blocks[byKey.get(key)];
     if (!el) return;
     const r = el.getBoundingClientRect();
-    window.scrollTo(0, scrollY + r.top + frac * r.height);
+    // the same block at the same height on the screen as on the other page
+    window.scrollTo(0, Math.max(0, scrollY + r.top + frac * r.height - (below || 0)));
   }
 
   // ---- styles ----
