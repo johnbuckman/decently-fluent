@@ -82,8 +82,10 @@ final class Generator {
         Task {
             while !queue.isEmpty {
                 let job = queue.removeFirst()
-                if job.book.humanTargetEdition != nil || job.book.humanSideEdition != nil { await matchChapters(job.book) }
-                if let ch = job.paragraphs.first?.chapter, ch.humanTargetText != nil || ch.humanSideText != nil {
+                // lining up published translations needs a general AI service; on the device, Apple's translator stands in
+                let canLineUp = LLMSettings.provider != .onDevice
+                if canLineUp, job.book.humanTargetEdition != nil || job.book.humanSideEdition != nil { await matchChapters(job.book) }
+                if canLineUp, let ch = job.paragraphs.first?.chapter, ch.humanTargetText != nil || ch.humanSideText != nil {
                     await lineUp(ch, book: job.book)
                 }
                 for batch in batches(job.paragraphs) {
@@ -164,6 +166,32 @@ final class Generator {
     private func generate(_ batch: [Paragraph], level: Level, book: Book) async {
         guard let context = book.modelContext else { return }
         let lang = book.language
+        // the side column in the reader's own language, from Apple's translator on the device where it can: free and
+        // instant, and the request below then doesn't have to write it (published translations are lined up first)
+        if writesSide && !book.sideIsSource {
+            let missing = batch.filter { $0.sideTranslation == nil }
+            if !missing.isEmpty,
+               let side = await AppleTranslation.translate(missing.map(\.source), from: book.source.rawValue, to: book.native.rawValue) {
+                for (p, t) in zip(missing, side) where !t.isEmpty { p.sideTranslation = t }
+            }
+        }
+        // the Native level of a retold book with no published translation: Apple's translation is the text, no request
+        if level == .native, !book.isOriginal, batch.allSatisfy({ $0.humanTarget == nil }),
+           let texts = await AppleTranslation.translate(batch.map(\.source), from: book.source.rawValue, to: lang.rawValue),
+           !texts.contains(where: \.isEmpty) {
+            for (p, text) in zip(batch, texts) {
+                var r = p.renditions
+                r[level.rawValue] = Rendition(text: text, glossary: [])
+                p.renditions = r
+                pending.remove(Self.key(p, level))
+            }
+            try? context.save()
+            return
+        }
+        if LLMSettings.provider == .onDevice {
+            await generateOnDevice(batch, level: level, book: book, context: context)
+            return
+        }
         let given = batch.allSatisfy { Self.given($0, level: level, book: book) != nil }
         let needSide = writesSide && !book.sideIsSource && batch.contains { $0.sideTranslation == nil }
         let system = Self.systemPrompt(level: level, book: book, given: given, needSide: needSide,
@@ -212,6 +240,42 @@ final class Generator {
             var all = book.introduced
             all[level.rawValue] = introduced
             book.introduced = all
+            try? context.save()
+            lastError = nil
+        } catch {
+            for p in batch {
+                let k = Self.key(p, level)
+                pending.remove(k)
+                failed[k] = error.localizedDescription
+            }
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// The free service: simplified in English on the device, then translated (OnDevice.swift). No glossary.
+    private func generateOnDevice(_ batch: [Paragraph], level: Level, book: Book, context: ModelContext) async {
+        let words = batch.reduce(0) { $0 + $1.source.split(separator: " ").count }
+        current = (Set(batch.map { Self.key($0, level) }), words, Date())
+        defer { current = nil }
+        let started = Date()
+        do {
+            let texts: [String]
+            if batch.allSatisfy({ Self.given($0, level: level, book: book) != nil }) {
+                // an original, or a published translation, read at Native level: shown as it is
+                texts = batch.map { Self.given($0, level: level, book: book)! }
+            } else {
+                texts = try await OnDevice.rewrite(batch.map(\.source), from: book.source.rawValue, to: book.language.rawValue, level: level)
+            }
+            if words > 0 {
+                let perWord = max(0, Date().timeIntervalSince(started) - 4) / Double(words)
+                Self.secondsPerWord = Self.secondsPerWord * 0.6 + perWord * 0.4
+            }
+            for (p, text) in zip(batch, texts) {
+                var r = p.renditions
+                r[level.rawValue] = Rendition(text: text, glossary: [])
+                p.renditions = r
+                pending.remove(Self.key(p, level))
+            }
             try? context.save()
             lastError = nil
         } catch {
@@ -417,6 +481,9 @@ final class Generator {
     private struct WordAnswer: Decodable { var lemma: String; var m: String }
 
     func lookUp(_ word: String, sentence: String, language: Language, native: Language) async -> (lemma: String, meaning: String)? {
+        if LLMSettings.provider == .onDevice {
+            return await OnDevice.meaning(of: word, sentence: sentence, from: language.rawValue, to: native.rawValue)
+        }
         let system = "You are a concise \(language.name)–\(native.name) dictionary. Answer with only a JSON object."
         let user = """
         Give the dictionary form and the \(native.name) meaning, as used here, of the \(language.name) word "\(word)" in:

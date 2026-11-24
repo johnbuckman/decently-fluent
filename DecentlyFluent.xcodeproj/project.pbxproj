@@ -22,6 +22,8 @@
 		663C304766F06AA594F2AE46 /* Gutenberg.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1445B3549C1850729781449 /* Gutenberg.swift */; };
 		8774D0B84EB5D75B55768144 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D803C0FBBE05B49042A5D513 /* LibraryView.swift */; };
 		8F9C6037540A506B1EDA4320 /* Recommender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64505268242E29C1B72D8C94 /* Recommender.swift */; };
+		988BF078BAEE99C433814628 /* OnDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FE7D7D94C156A86FBC81DE /* OnDevice.swift */; };
+		9FAA831FE5A24683771E3084 /* AppleTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E62661B44B5AB331C019BD2 /* AppleTranslation.swift */; };
 		A41832F9D249CA8A4161F003 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 187E5A3FE5ECD39A0532C254 /* ShareViewController.swift */; };
 		A53E6CED843CA72617293AA8 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393D3C545B9CABAE7299F6AE /* ReaderView.swift */; };
 		A6B58F31B43187C2808FBC10 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 587FEBCACBFDC7BA392835C6 /* libsqlite3.tbd */; };
@@ -62,7 +64,9 @@
 
 /* Begin PBXFileReference section */
 		04AEB75BFE3C32B58B0C0CC7 /* WordFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordFlow.swift; sourceTree = "<group>"; };
+		09FE7D7D94C156A86FBC81DE /* OnDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDevice.swift; sourceTree = "<group>"; };
 		0CD16FC36092AE7DFE4D0574 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0E62661B44B5AB331C019BD2 /* AppleTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTranslation.swift; sourceTree = "<group>"; };
 		187E5A3FE5ECD39A0532C254 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		2639F26696A9E7787D117F44 /* Importer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Importer.swift; sourceTree = "<group>"; };
 		26F392E4DB8A0377F7479FE1 /* LLM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLM.swift; sourceTree = "<group>"; };
@@ -125,6 +129,7 @@
 		4161203FB75E78DC16D016DD /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				0E62661B44B5AB331C019BD2 /* AppleTranslation.swift */,
 				B50004F815996F1FF6812A9E /* Catalog.swift */,
 				3620C63795B1A1563CFFFD3D /* DiscoverView.swift */,
 				8FBE562F5154679F6545022C /* Generator.swift */,
@@ -136,6 +141,7 @@
 				D803C0FBBE05B49042A5D513 /* LibraryView.swift */,
 				26F392E4DB8A0377F7479FE1 /* LLM.swift */,
 				C36140060D1C202DF3142DE2 /* Models.swift */,
+				09FE7D7D94C156A86FBC81DE /* OnDevice.swift */,
 				CD194461655A5FC4A118EC67 /* PageCurl.swift */,
 				9E1396AFF1EEAEE12387A93E /* Pregenerated.swift */,
 				393D3C545B9CABAE7299F6AE /* ReaderView.swift */,
@@ -284,6 +290,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9FAA831FE5A24683771E3084 /* AppleTranslation.swift in Sources */,
 				387F5E6C8AFC0161FC2965F0 /* Catalog.swift in Sources */,
 				5B1F55EACFCB190F86D4F165 /* DiscoverView.swift in Sources */,
 				FB976DB2AB9B5F65AE56A384 /* Generator.swift in Sources */,
@@ -295,6 +302,7 @@
 				2E5E465EB278526E94EB0FEA /* Learning.swift in Sources */,
 				8774D0B84EB5D75B55768144 /* LibraryView.swift in Sources */,
 				1EA21F59B9392CAF28F77709 /* Models.swift in Sources */,
+				988BF078BAEE99C433814628 /* OnDevice.swift in Sources */,
 				6626E3F4060762A7AE177BFA /* PageCurl.swift in Sources */,
 				4A124497098189620CC12AD3 /* Pregenerated.swift in Sources */,
 				A53E6CED843CA72617293AA8 /* ReaderView.swift in Sources */,

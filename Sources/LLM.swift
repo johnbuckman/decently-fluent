@@ -2,6 +2,8 @@ import Foundation
 import Security
 
 enum Provider: String, CaseIterable, Identifiable {
+    /// Free: Apple's model and translator on the device, no key (OnDevice.swift).
+    case onDevice
     case claude, deepseek, openai
     /// Development only: a Claude Code session answers through tools/claude_bridge.py on the Mac.
     case bridge
@@ -12,12 +14,13 @@ enum Provider: String, CaseIterable, Identifiable {
         #if DEBUG
         allCases
         #else
-        [.claude, .deepseek, .openai]
+        [.onDevice, .claude, .deepseek, .openai]
         #endif
     }
 
     var name: String {
         switch self {
+        case .onDevice: "Apple, on this device (free)"
         case .claude: "Claude (Anthropic)"
         case .deepseek: "DeepSeek"
         case .openai: "ChatGPT (OpenAI)"
@@ -26,6 +29,7 @@ enum Provider: String, CaseIterable, Identifiable {
     }
     var defaultModel: String {
         switch self {
+        case .onDevice: ""
         case .claude: "claude-opus-5-5"
         case .deepseek: "deepseek-flash"
         // OpenAI's choice for the lowest cost and latency; it can run with reasoning off
@@ -33,7 +37,9 @@ enum Provider: String, CaseIterable, Identifiable {
         case .bridge: "http://localhost:8793/llm"
         }
     }
-    var needsKey: Bool { self != .bridge }
+    var needsKey: Bool { self != .bridge && self != .onDevice }
+    /// Whether a model name can be chosen in Settings.
+    var hasModel: Bool { self != .onDevice }
     var keyHint: String { self == .claude ? "sk-ant-…" : "sk-…" }
     /// For simulator testing: `SIMCTL_CHILD_DF_ANTHROPIC_KEY=… xcrun simctl launch …`
     var environmentKey: String {
@@ -49,7 +55,8 @@ enum LLMSettings {
     static var provider: Provider {
         get {
             if let p = ProcessInfo.processInfo.environment["DF_PROVIDER"].flatMap(Provider.init(rawValue:)) { return p }
-            return UserDefaults.standard.string(forKey: "provider").flatMap(Provider.init(rawValue:)) ?? .claude
+            // free and on the device unless the reader has chosen a service
+            return UserDefaults.standard.string(forKey: "provider").flatMap(Provider.init(rawValue:)) ?? .onDevice
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "provider") }
     }
@@ -72,7 +79,7 @@ enum LLMSettings {
 }
 
 enum LLMError: LocalizedError {
-    case noKey(Provider), http(Int, String), refused, badAnswer(String)
+    case noKey(Provider), http(Int, String), refused, badAnswer(String), notOnDevice
     var errorDescription: String? {
         switch self {
         case .noKey(let p): "Add your \(p.name) API key in Settings to translate."
@@ -84,6 +91,7 @@ enum LLMError: LocalizedError {
             }
         case .refused: "The model declined to translate this passage."
         case .badAnswer(let why): "The translation came back unreadable (\(why))."
+        case .notOnDevice: "This needs an AI service: choose one in Settings."
         }
     }
 
@@ -99,6 +107,8 @@ enum LLMError: LocalizedError {
 enum LLM {
     static func json(system: String, user: String) async throws -> Data {
         let p = LLMSettings.provider
+        // the on-device service has no general-purpose model to ask; its callers use OnDevice directly
+        if p == .onDevice { throw LLMError.notOnDevice }
         if p == .bridge {
             return try extractJSON(try await bridge(system: system, user: user, url: LLMSettings.model(p)))
         }

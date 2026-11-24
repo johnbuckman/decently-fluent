@@ -17,6 +17,7 @@ A graded-reader generator for iPhone, iPad and Mac, for learners of English, Fre
 - **Find a book for me:** a short guide (your language and the one you're learning, retold or original, level, favourite kinds of story, minutes a day), then books from the bundled Project Gutenberg catalog ranked by research on learning from reading — mostly Paul Nation's — with every reason and its source shown (`Sources/Research.swift`).
 - **Open books from anywhere:** Files, another app's share sheet, or AirDrop (EPUB, PDF, text). The app detects the book's language and asks whether to read the original or retell it.
 - **Read the web at your level:** a web browser (the globe button in the library) that rewrites each page in place, in the language you're learning, at your level, keeping its links, pictures and layout. Only the parts of the page on screen or just below are rewritten, as you scroll, and rewritten pages are kept, so going back costs nothing. Typing words instead of an address searches Google in the language you're learning; Google's own pages (search results, maps and so on) are shown as they are, not rewritten. Portrait shows only the rewritten page; landscape puts the page as written on the right, scrolling along paragraph by paragraph. Tap a word for its meaning, double-tap a word you don't know to add it to *My words*, and use the eye button to highlight the words probably above your level, with the meaning beside the first one on the page. A page already in the language you're learning is simplified (or shown as written at Native). Share a web page from Safari or any other app to Decently Fluent to open it there.
+- **Apple's translator on the device** (iOS 26 and later, once the language packs are downloaded from Settings): writes the Native level of books without a published translation, Native web pages, and the side column in your own language, free, instantly and offline. The other levels use the AI service.
 - **Recycling:** each book keeps a list of the words each level has introduced and asks the writer to reuse them until each has been seen 5 times, as graded readers do.
 
 ## Install
@@ -41,7 +42,7 @@ For simulator testing without typing a key, pass it in the launch environment:
 SIMCTL_CHILD_DF_PROVIDER=deepseek SIMCTL_CHILD_DF_DEEPSEEK_KEY=sk-… xcrun simctl launch booted com.decentespresso.decentlyfluent
 ```
 
-(`DF_ANTHROPIC_KEY` for Claude, `DF_OPENAI_KEY` for ChatGPT with `DF_PROVIDER=openai`.) `SIMCTL_CHILD_DF_OPEN_WEB=https://…` opens the web browser at a page. Debug builds also take `DF_DOUBLE_TAP_MS` (for example 4000), as taps sent one at a time to the simulator are slower than a finger's double-tap.
+(`DF_ANTHROPIC_KEY` for Claude, `DF_OPENAI_KEY` for ChatGPT with `DF_PROVIDER=openai`.) `SIMCTL_CHILD_DF_OPEN_WEB=https://…` opens the web browser at a page. `DF_ONDEVICE_TEST=1` rewrites three test paragraphs with the free on-device service (French, A2 and B1), reports the time and text on stderr, and quits (Apple's AI and translator don't work in the iOS simulator; they do on devices and in the Mac app). Debug builds also take `DF_DOUBLE_TAP_MS` (for example 4000), as taps sent one at a time to the simulator are slower than a finger's double-tap.
 
 ### Dev bridge: a Claude Code session answers instead of an API
 
@@ -73,6 +74,7 @@ Book texts are fetched from Gutenberg mirrors, measured and discarded. Book file
 | --- | --- |
 | `Sources/Models.swift` | SwiftData models (Book, Chapter, Paragraph, LearnerWord), CEFR level rules |
 | `Sources/Importer.swift` | EPUB (zip or Apple Books folder), PDF and text import; a small zip reader |
+| `Sources/AppleTranslation.swift` | Apple's on-device translator: Native level and side column, Settings download |
 | `Sources/LLM.swift` | Claude, DeepSeek and OpenAI (ChatGPT) clients, retries, Keychain |
 | `Sources/Generator.swift` | The translation queue, the graded-reader prompt, recycling of introduced words |
 | `Sources/Learning.swift` | Lemmas (NaturalLanguage), double-tap tracking and when a word counts as learned |

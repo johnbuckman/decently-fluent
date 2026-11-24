@@ -167,6 +167,23 @@ final class WebTranslator {
     /// Writes one batch; false if the request failed.
     @discardableResult
     private func generate(_ batch: [WebBlock], key: String) async -> Bool {
+        // Native level of a page in another language: Apple's translator on the device, free and instant (it keeps
+        // the ⟦n⟧ link markers in place); the AI service only when it isn't available
+        if level == .native, let from = pageLanguage, from != language.nl,
+           let texts = await AppleTranslation.translate(batch.map(\.text), from: from.rawValue, to: language.rawValue),
+           !texts.contains(where: \.isEmpty) {
+            guard key == cacheKey else { return true }
+            for (b, text) in zip(batch, texts) {
+                let r = WebRendition(text: text, glossary: [])
+                let h = Self.hash(b.text)
+                cache[h] = r
+                for id in waiting.removeValue(forKey: h) ?? [b.id] { onReady(id, r) }
+            }
+            saveCache()
+            lastError = nil
+            return true
+        }
+        if LLMSettings.provider == .onDevice { return await generateOnDevice(batch, key: key) }
         let system = systemPrompt()
         var user = "Web page: \(page?.absoluteString ?? "")\n\nBlocks:\n"
         for b in batch { user += "\n[i=\(b.id)] \(b.text)\n" }
@@ -204,6 +221,41 @@ final class WebTranslator {
             }
             Self.setIntroduced(introduced, language, level)
             if current { saveCache(); lastError = nil }
+            return true
+        } catch {
+            guard key == cacheKey else { return false }
+            lastError = error.localizedDescription
+            for b in batch { for id in waiting.removeValue(forKey: Self.hash(b.text)) ?? [b.id] { onReady(id, nil) } }
+            return false
+        }
+    }
+
+    /// The free service (OnDevice.swift). Short pieces (labels, headings, menu items) are only translated, keeping
+    /// their links; longer ones are simplified in English and translated, without the links inside them.
+    private func generateOnDevice(_ batch: [WebBlock], key: String) async -> Bool {
+        let source = pageLanguage?.rawValue ?? "en", target = language.rawValue
+        let plain = { (t: String) in t.replacingOccurrences(of: #"⟦/?\d+⟧"#, with: "", options: .regularExpression) }
+        let short = batch.map { plain($0.text).split(separator: " ").count < 8 }
+        do {
+            var texts = [String](repeating: "", count: batch.count)
+            let shortIdx = batch.indices.filter { short[$0] }, longIdx = batch.indices.filter { !short[$0] }
+            if !shortIdx.isEmpty {
+                let t = try await OnDevice.rewrite(shortIdx.map { batch[$0].text }, from: source, to: target, level: .native)
+                for (i, x) in zip(shortIdx, t) { texts[i] = x }
+            }
+            if !longIdx.isEmpty {
+                let t = try await OnDevice.rewrite(longIdx.map { plain(batch[$0].text) }, from: source, to: target, level: level)
+                for (i, x) in zip(longIdx, t) { texts[i] = x }
+            }
+            guard key == cacheKey else { return true }
+            for (b, text) in zip(batch, texts) {
+                let r = WebRendition(text: text, glossary: [])
+                let h = Self.hash(b.text)
+                cache[h] = r
+                for id in waiting.removeValue(forKey: h) ?? [b.id] { onReady(id, text.isEmpty ? nil : r) }
+            }
+            saveCache()
+            lastError = nil
             return true
         } catch {
             guard key == cacheKey else { return false }

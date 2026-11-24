@@ -5,6 +5,30 @@ import UniformTypeIdentifiers
 @main
 struct DecentlyFluentApp: App {
     init() {
+        #if DEBUG
+        // development: DF_ONDEVICE_TEST=1 rewrites test paragraphs with the free on-device service (French, A2 and B1),
+        // reports how long it took and what it wrote, then quits (in the iOS simulator Apple's AI isn't available)
+        if ProcessInfo.processInfo.environment["DF_ONDEVICE_TEST"] != nil {
+            Task { @MainActor in
+                func say(_ s: String) { FileHandle.standardError.write(Data("DFTEST \(s)\n".utf8)) }
+                say("model: \(OnDevice.modelProblem ?? "available"); en->fr: \(await AppleTranslation.status(from: "en", to: "fr"))")
+                let paras = [
+                    "Espresso is a concentrated form of coffee produced by forcing hot water under high pressure through finely ground coffee beans. Originating in Italy, espresso has become one of the most popular coffee-brewing methods worldwide.",
+                    "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it.",
+                    "So she was considering in her own mind (as well as she could, for the hot day made her feel very sleepy and stupid), whether the pleasure of making a daisy-chain would be worth the trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her.",
+                ]
+                for level in [Level.a2, .b1] {
+                    let t0 = Date()
+                    do {
+                        let out = try await OnDevice.rewrite(paras, from: "en", to: "fr", level: level)
+                        say("\(level.rawValue) \(String(format: "%.1f", Date().timeIntervalSince(t0))) s")
+                        for o in out { say("  \(o)") }
+                    } catch { say("\(level.rawValue) error: \(error.localizedDescription)") }
+                }
+                exit(0)
+            }
+        }
+        #endif
         // development: write pages ahead for the most recommended books (Pregenerated.swift), then quit
         if let out = ProcessInfo.processInfo.environment["DF_PREGENERATE"] {
             Task { @MainActor in
@@ -35,10 +59,34 @@ struct LibraryView: View {
     /// The web browser, and the page it opens with (one shared from another app).
     @State private var browser: BrowserStart?
     var stored = StoredProfile()
+    /// The free on-device service: what's missing (a language pair to download, or why Apple's AI can't run here).
+    @State private var missingPair: (source: String, target: String)?
+    @State private var modelProblem: String?
+    @State private var downloadingPair: (source: String, target: String)?
+    @AppStorage("guide.language") private var learning = Language.french.rawValue
+    @AppStorage("nativeLanguage") private var nativeCode = Language.english.rawValue
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                if let modelProblem {
+                    Section {
+                        Label("Apple's on-device AI isn't available: \(modelProblem). Choose a service in Settings to rewrite books.",
+                              systemImage: "exclamationmark.triangle")
+                            .font(.subheadline)
+                    }
+                } else if let missingPair {
+                    Section {
+                        Button {
+                            downloadingPair = missingPair
+                        } label: {
+                            Label("Download \(languageName(missingPair.target == "en" ? missingPair.source : missingPair.target)) for translation on this device",
+                                  systemImage: "arrow.down.circle")
+                        }
+                    } footer: {
+                        Text("A one-time download from Apple. Books and web pages are then rewritten on your iPhone: free, private and offline.")
+                    }
+                }
                 Section {
                     if !readyBooks.isEmpty {
                         Button { showReady = true } label: {
@@ -121,6 +169,8 @@ struct LibraryView: View {
                 RecommendedBooksView(books: readyBooks, profile: stored.profile) { showReady = false; path = [$0] }
             }
             .task { await ReadyShelf.shared.refresh() }
+            .task(id: "\(learning)|\(nativeCode)|\(showSettings)") { await checkOnDevice() }
+            .modifier(AppleTranslationDownload(pair: $downloadingPair) { Task { await checkOnDevice() } })
             .sheet(item: $pendingImport) { imported in
                 ImportChoiceView(imported: imported) { lang, source, native in
                     pendingImport = nil
@@ -168,6 +218,22 @@ struct LibraryView: View {
                 return x != y ? x : a.offset < b.offset
             }
             .map(\.element)
+    }
+
+    private func languageName(_ code: String) -> String { Language(rawValue: code)?.name ?? code }
+
+    /// With the free service selected: whether Apple's AI runs here and which translation languages are missing.
+    private func checkOnDevice() async {
+        guard LLMSettings.provider == .onDevice else { missingPair = nil; modelProblem = nil; return }
+        modelProblem = OnDevice.modelProblem
+        guard modelProblem == nil else { missingPair = nil; return }
+        // books and pages are simplified in English, then translated into the language being learned; the side
+        // column is in the reader's own language
+        var needed: [(String, String)] = []
+        if learning != "en" { needed.append(("en", learning)) }
+        if nativeCode != "en" && nativeCode != learning { needed.append(("en", nativeCode)) }
+        missingPair = nil
+        for (a, b) in needed where !(await AppleTranslation.isReady(from: a, to: b)) { missingPair = (a, b); break }
     }
 
     private func importBook(_ url: URL) {
@@ -223,6 +289,9 @@ struct SettingsView: View {
     @State private var key = ""
     @State private var hasKey = false
     @AppStorage("nativeLanguage") private var native = Language.english.rawValue
+    @AppStorage("guide.language") private var learning = Language.french.rawValue
+    @State private var appleStatus: AppleTranslation.Status?
+    @State private var downloading: (source: String, target: String)?
 
     var body: some View {
         NavigationStack {
@@ -238,8 +307,10 @@ struct SettingsView: View {
                     Picker("Service", selection: $provider) {
                         ForEach(Provider.choices) { Text($0.name).tag($0) }
                     }
-                    TextField(provider == .bridge ? "Bridge address" : "Model", text: $model, prompt: Text(provider.defaultModel))
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if provider.hasModel {
+                        TextField(provider == .bridge ? "Bridge address" : "Model", text: $model, prompt: Text(provider.defaultModel))
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    }
                     if provider.needsKey {
                         SecureField(hasKey ? "Key saved — type to replace" : provider.keyHint, text: $key)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -249,7 +320,26 @@ struct SettingsView: View {
                 } footer: {
                     Text("Only the next few pages are rewritten, as you read, so changing your level costs nothing and no credits go on pages you never reach. Each level is kept once made. Your key is stored in the iOS Keychain on this device.")
                 }
+                if let appleStatus, appleStatus != .unavailable {
+                    Section {
+                        if appleStatus == .ready {
+                            Label("Ready for \(name(learning)) and \(name(native))", systemImage: "checkmark.circle")
+                        } else {
+                            Button {
+                                downloading = (learning, native)
+                            } label: {
+                                Label("Download \(name(learning)) and \(name(native))", systemImage: "arrow.down.circle")
+                            }
+                        }
+                    } header: {
+                        Text("Translation on this device")
+                    } footer: {
+                        Text("Apple's translator, built into iOS, writes the Native level and the side column in your language on your device: free, instant and offline. The other levels use the service above.")
+                    }
+                }
             }
+            .modifier(AppleTranslationDownload(pair: $downloading) { refreshApple() })
+            .task(id: "\(learning)|\(native)") { refreshApple() }
             .navigationTitle("Settings")
             .onAppear(perform: load)
             .onChange(of: provider) { _, _ in load() }
@@ -264,6 +354,13 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private func name(_ code: String) -> String { Language(rawValue: code)?.name ?? code }
+
+    private func refreshApple() {
+        let (l, n) = (learning, native)
+        Task { appleStatus = await AppleTranslation.status(from: l, to: n) }
     }
 
     private func load() {
