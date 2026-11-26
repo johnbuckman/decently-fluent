@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F697FDDAA2B0A86CBFA0B98 /* WebHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9ED625D16D2B3A7AFCD674B /* WebHistory.swift */; };
 		1EA21F59B9392CAF28F77709 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36140060D1C202DF3142DE2 /* Models.swift */; };
 		2E5E465EB278526E94EB0FEA /* Learning.swift in Sources */ = {isa = PBXBuildFile; fileRef = B177A84863335162960BB1AF /* Learning.swift */; };
 		325DAC340017A3A79ACC670D /* Research.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE215EC76FA1545148FF006B /* Research.swift */; };
@@ -86,6 +87,7 @@
 		B177A84863335162960BB1AF /* Learning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Learning.swift; sourceTree = "<group>"; };
 		B50004F815996F1FF6812A9E /* Catalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
 		C36140060D1C202DF3142DE2 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		C9ED625D16D2B3A7AFCD674B /* WebHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebHistory.swift; sourceTree = "<group>"; };
 		CD194461655A5FC4A118EC67 /* PageCurl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageCurl.swift; sourceTree = "<group>"; };
 		CE4CF4736EBC156B66D6FFBB /* catalog.sqlite */ = {isa = PBXFileReference; lastKnownFileType = file; path = catalog.sqlite; sourceTree = "<group>"; };
 		D803C0FBBE05B49042A5D513 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 				AE215EC76FA1545148FF006B /* Research.swift */,
 				AB8015A141BEBCEE22D2CA72 /* SampleStory.swift */,
 				D9759E3BFEDE28C56AC4F5FF /* WebBrowserView.swift */,
+				C9ED625D16D2B3A7AFCD674B /* WebHistory.swift */,
 				499D3D971892275316D621E4 /* WebScript.swift */,
 				EE823DEE7EACB7B4A4E20310 /* WebTranslator.swift */,
 				8149E7B9D85B737801396E58 /* Wikipedia.swift */,
@@ -310,6 +313,7 @@
 				325DAC340017A3A79ACC670D /* Research.swift in Sources */,
 				5245C5886D5E8BDFA8DA8BBB /* SampleStory.swift in Sources */,
 				A98DDE988C8041D68FBAEB32 /* WebBrowserView.swift in Sources */,
+				0F697FDDAA2B0A86CBFA0B98 /* WebHistory.swift in Sources */,
 				AE173DDBCBE36DD8EFCE64E4 /* WebScript.swift in Sources */,
 				3C1794E972E9624951A32D82 /* WebTranslator.swift in Sources */,
 				AC88FE466EBBCAE06A5B1341 /* Wikipedia.swift in Sources */,

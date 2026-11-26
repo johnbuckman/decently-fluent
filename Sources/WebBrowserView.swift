@@ -86,7 +86,12 @@ final class WebModel: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRec
             translated.observe(\.canGoForward) { [weak self] v, _ in MainActor.assumeIsolated { self?.canGoForward = v.canGoForward } },
             translated.observe(\.isLoading) { [weak self] v, _ in MainActor.assumeIsolated { self?.isLoading = v.isLoading } },
             translated.observe(\.estimatedProgress) { [weak self] v, _ in MainActor.assumeIsolated { self?.progress = v.estimatedProgress } },
-            translated.observe(\.title) { [weak self] v, _ in MainActor.assumeIsolated { self?.title = v.title ?? "" } },
+            translated.observe(\.title) { [weak self] v, _ in
+                MainActor.assumeIsolated {
+                    self?.title = v.title ?? ""
+                    if let u = v.url { WebHistory.shared.retitle(u, v.title ?? "") }
+                }
+            },
             translated.observe(\.url) { [weak self] v, _ in
                 MainActor.assumeIsolated {
                     guard let self, let u = v.url else { return }
@@ -159,7 +164,9 @@ final class WebModel: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRec
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if webView === translated { run("window.__df && __df.showNew(\(showNewWords))", in: translated) }
+        guard webView === translated else { return }
+        run("window.__df && __df.showNew(\(showNewWords))", in: translated)
+        if let u = webView.url { WebHistory.shared.record(u, title: webView.title ?? "") }
     }
 
     /// A link that opens a new window opens here instead.
@@ -341,6 +348,7 @@ struct WebBrowserView: View {
     @FocusState private var editing: Bool
     /// Translation languages the free service needs, being downloaded from the error's Download button.
     @State private var downloadPair: (source: String, target: String)?
+    @State private var showHistory = false
     let start: URL?
 
     init(start: URL?) {
@@ -422,6 +430,7 @@ struct WebBrowserView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+            historyButton
             if wide {
                 levelMenu
                 newWordsButton
@@ -457,6 +466,14 @@ struct WebBrowserView: View {
             Button { model.translated.goForward() } label: { Image(systemName: "chevron.forward") }
                 .disabled(!model.canGoForward).accessibilityLabel("Forward")
         }
+    }
+
+    private var historyButton: some View {
+        Button { showHistory = true } label: { Label("History", systemImage: "clock") }
+            .labelStyle(.iconOnly)
+            .popover(isPresented: $showHistory) {
+                WebHistoryView { url in editing = false; model.load(url) }
+            }
     }
 
     private var newWordsButton: some View {
